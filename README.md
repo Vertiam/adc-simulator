@@ -1,5 +1,5 @@
 # ADC Resolution & Noise Simulator
-### Hackathon Project #19 — Signal Processing & Digital Electronics
+### Quantum Hackathon Track #4 PS_19 — Signal Processing & Digital Electronics
 
 > **Visualize how analog signals become digital data — and how oversampling recovers lost quality.**  
 > An interactive, browser-based simulator that makes the invisible world of Analog-to-Digital Conversion tangible.
