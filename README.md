@@ -475,6 +475,7 @@ RMS Noise              =  step / √12    (for uniform quantization)
 | **Team Leader** | Swayam Viral Marfatia | RA2511002010080 |
 | **Member** | Narayan Murthy | RA2511002010124 |
 | **Member** | Shirly Oviya | RA2511054010030 |
+| **Member** | Mithasha P Sishaj | RA2511053050040 |
 
 Built to make signal processing concepts accessible through interactive visualisation.
 
