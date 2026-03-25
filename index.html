@@ -291,8 +291,8 @@
             </h3>
           </div>
           <div class="legend">
-            <span class="legend-item"><span class="legend-line" style="background:var(--blue);"></span>Original</span>
-            <span class="legend-item"><span class="legend-line" style="background:var(--coral);"></span>Quantized</span>
+            <span class="legend-item"><span class="legend-line" style="background:#5b9cf6;"></span>Original</span>
+            <span class="legend-item"><span class="legend-line" style="background:#ff6500;"></span>Quantized</span>
           </div>
         </div>
         <div class="chart-canvas-wrap">
@@ -574,12 +574,42 @@ function qualityInfo(snr) {
   return             {label:'Studio',   col:'#4ade80'};
 }
 
+/* ─── QUANTIZATION LEVEL LINES PLUGIN ──────────────────────────
+   A custom Chart.js plugin that draws a horizontal dashed line
+   for every quantization level on the waveform chart.
+   This makes the staircase snapping immediately obvious —
+   you can see exactly which level each sample locks onto.
+   Only renders when bits ≤ 7 (max 128 lines) to avoid clutter.
+*/
+let currentBits = 4;
+const levelLinesPlugin = {
+  id: 'levelLines',
+  afterDraw(chart) {
+    if (currentBits > 7) return;
+    const { ctx, chartArea:{ left, right }, scales:{ y } } = chart;
+    const levels = Math.pow(2, currentBits);
+    const step   = 2 / levels;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(249,115,22,0.22)';
+    ctx.lineWidth   = 0.8;
+    ctx.setLineDash([3, 6]);
+    for (let i = 0; i <= levels; i++) {
+      const val = -1 + i * step;
+      if (val < -1.42 || val > 1.42) continue;
+      const yPx = y.getPixelForValue(val);
+      ctx.beginPath(); ctx.moveTo(left, yPx); ctx.lineTo(right, yPx); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
 function update() {
   const bits=+document.getElementById('bits').value,
         osExp=+document.getElementById('osRate').value,
         freq=+document.getElementById('freq').value,
         noise=+document.getElementById('noiseFloor').value,
         osRate=Math.pow(2,osExp);
+  currentBits = bits;
 
   document.getElementById('bits-val').textContent  = bits+'-bit';
   document.getElementById('os-val').textContent    = osRate+'×';
@@ -603,7 +633,20 @@ function update() {
   document.getElementById('snr-fill').style.background = qi.col;
 
   const L = Array.from({length:d.original.length},(_,i)=>i);
-  waveChart.data.labels=L; waveChart.data.datasets[0].data=d.original; waveChart.data.datasets[1].data=d.quantized; waveChart.update('none');
+
+  /* Scale fill opacity: large at low bits (big error), subtler at high bits */
+  const fillAlpha = Math.max(0.10, 0.45 - (bits - 2) * 0.025);
+  waveChart.data.datasets[2].fill = {
+    target: 0,
+    above: `rgba(249,115,22,${fillAlpha})`,
+    below: `rgba(249,115,22,${fillAlpha})`
+  };
+
+  waveChart.data.labels = L;
+  waveChart.data.datasets[0].data = d.original;
+  waveChart.data.datasets[1].data = d.quantized;
+  waveChart.data.datasets[2].data = d.quantized;
+  waveChart.update('none');
   errorChart.data.labels=L; errorChart.data.datasets[0].data=d.errors; errorChart.update('none');
   const curve = Array.from({length:17},(_,b)=>b===0?null:parseFloat((6.02*b+1.76+10*Math.log10(osRate)).toFixed(1)));
   snrChart.data.datasets[0].data = curve;
@@ -619,12 +662,24 @@ function initCharts() {
     scales:{ x:{display:false}, y:{ ticks:{color:tick,font:{family:'JetBrains Mono',size:10},maxTicksLimit:5}, grid:{color:grid}, border:{display:false} } }
   };
 
+  /* ── Waveform chart — 3 datasets:
+       [0] Original    blue, thin, smooth
+       [1] Quantized   bright orange, thick, stepped
+       [2] Fill anchor invisible copy of quantized that fills between
+                       itself and [0], shading the error gap orange.
+     Even at 12-bit where lines nearly overlap, the shaded area
+     stays visible. The level-lines plugin draws horizontal dashed
+     lines at each quantization boundary (≤ 7 bits only). */
   waveChart = new Chart(document.getElementById('waveChart'), {
-    type:'line', data:{ labels:[], datasets:[
-      {label:'Original', data:[], borderColor:'#5b9cf6', borderWidth:1.5, pointRadius:0, tension:0.4},
-      {label:'Quantized',data:[], borderColor:'#f97316', borderWidth:2,   pointRadius:0, tension:0, stepped:true}
+    type:'line',
+    data:{ labels:[], datasets:[
+      { label:'Original',  data:[], borderColor:'#5b9cf6', borderWidth:1.5, pointRadius:0, tension:0.4, fill:false },
+      { label:'Quantized', data:[], borderColor:'#ff6500', borderWidth:3,   pointRadius:0, tension:0, stepped:true, fill:false },
+      { label:'_fill',     data:[], borderColor:'transparent', borderWidth:0, pointRadius:0, tension:0, stepped:true,
+        fill:{ target:0, above:'rgba(249,115,22,0.3)', below:'rgba(249,115,22,0.3)' } }
     ]},
-    options:{...base, scales:{...base.scales, y:{...base.scales.y,min:-1.4,max:1.4}}}
+    options:{...base, scales:{...base.scales, y:{...base.scales.y,min:-1.4,max:1.4}}},
+    plugins:[levelLinesPlugin]
   });
 
   errorChart = new Chart(document.getElementById('errorChart'), {
