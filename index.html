@@ -340,23 +340,6 @@
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════════════════════
-   GLOBAL TOOLTIP ENGINE
-   ═══════════════════════════════════════════════════════════════
-   WHY JS instead of CSS :hover + absolute child?
-   ─────────────────────────────────────────────
-   The previous CSS approach used:
-     .tip { position: relative; }
-     .tip-bubble { position: absolute; }
-   That works ONLY when no ancestor has overflow:hidden.
-   Our .panel divs do have overflow:hidden (for border-radius
-   clipping), so the bubble was cut off.
-
-   The fix: one #g-tip on <body>, always visible in the stacking
-   context, positioned via getBoundingClientRect() which returns
-   viewport-relative coordinates → use position:fixed.
-   Arrow x-position is adjusted so it always points at the word.
-═══════════════════════════════════════════════════════════════ */
 (function(){
   const tip   = document.getElementById('g-tip');
   const gtI   = document.getElementById('gt-icon');
@@ -574,13 +557,6 @@ function qualityInfo(snr) {
   return             {label:'Studio',   col:'#4ade80'};
 }
 
-/* ─── QUANTIZATION LEVEL LINES PLUGIN ──────────────────────────
-   A custom Chart.js plugin that draws a horizontal dashed line
-   for every quantization level on the waveform chart.
-   This makes the staircase snapping immediately obvious —
-   you can see exactly which level each sample locks onto.
-   Only renders when bits ≤ 7 (max 128 lines) to avoid clutter.
-*/
 let currentBits = 4;
 const levelLinesPlugin = {
   id: 'levelLines',
