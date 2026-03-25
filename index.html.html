@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADC Resolution & Noise Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #111111;
+    --s1:      #1a1a1a;
+    --s2:      #222222;
+    --s3:      #2c2c2c;
+    --s4:      #383838;
+    --border:  rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.14);
+    --text:    #e8e8e8;
+    --muted:   #555;
+    --muted2:  #888;
+    --blue:    #5b9cf6;
+    --coral:   #f97316;
+    --green:   #4ade80;
+    --red:     #f87171;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --r: 10px; --r-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+  .app { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; }
+
+  /* ── GLOBAL TOOLTIP ─────────────────────────────────────────────
+     Lives directly on <body> → never clipped by overflow:hidden.
+     JS positions it above the hovered element using
+     getBoundingClientRect() + window.scrollY (fixed coords).
+     The arrow is a pure-CSS border triangle.
+  ──────────────────────────────────────────────────────────────── */
+  #g-tip {
+    display: none;
+    position: fixed;
+    z-index: 99999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    transform: translateY(6px);
+    width: 240px;
+    background: #232323;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 10px;
+    padding: 13px 15px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.7);
+  }
+  #g-tip.show { opacity: 1; transform: translateY(0); }
+  #g-tip .gt-icon  { font-size: 20px; display: block; margin-bottom: 6px; }
+  #g-tip .gt-title { font-family: var(--mono); font-size: 11px; font-weight: 700; color: #e8e8e8; margin-bottom: 5px; letter-spacing: 0.3px; }
+  #g-tip .gt-body  { font-size: 12px; color: #999; line-height: 1.65; }
+  #g-tip .gt-arr   { position: absolute; bottom: -8px; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 8px solid rgba(255,255,255,0.18); }
+  #g-tip .gt-arr::after { content:''; position: absolute; top: -9px; left: -7px; width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 7px solid #232323; }
+
+  /* underlined hoverable terms */
+  .tip { border-bottom: 1.5px dashed rgba(255,255,255,0.28); color: var(--text); cursor: help; font-weight: 500; }
+
+  /* ── HEADER ─────── */
+  header { margin-bottom: 24px; }
+  header h1 { font-family: var(--mono); font-size: 19px; font-weight: 700; color: var(--text); letter-spacing: -0.4px; }
+  header p  { font-size: 12px; color: var(--muted2); margin-top: 5px; line-height: 1.9; }
+
+  /* ── LAYOUT ─────── */
+  .grid-main { display: grid; grid-template-columns: 288px 1fr; gap: 14px; align-items: start; }
+  @media (max-width:820px) { .grid-main { grid-template-columns: 1fr; } }
+
+  /* ── PANEL ──────── */
+  .panel { background: var(--s1); border: 1px solid var(--border); border-radius: var(--r); }
+  .panel-header { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; background: var(--s2); border-radius: var(--r) var(--r) 0 0; }
+  .panel-header h2 { font-family: var(--mono); font-size: 10px; font-weight: 600; color: var(--muted2); letter-spacing: 1.2px; text-transform: uppercase; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .dot.active { background: #e8e8e8; box-shadow: 0 0 5px rgba(255,255,255,0.35); }
+  .dot.coral  { background: var(--coral); box-shadow: 0 0 5px rgba(249,115,22,0.5); }
+  .dot.green  { background: var(--green); box-shadow: 0 0 5px rgba(74,222,128,0.5); }
+  .panel-body { padding: 14px; }
+
+  /* ── STATS ──────── */
+  .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 10px; }
+  .stat-card { background: var(--s2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px; text-align: center; }
+  .stat-label { font-size: 10px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .stat-val   { font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--text); }
+  .stat-sub   { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+  /* ── QUALITY BAR ── */
+  .qual-wrap { background: var(--s2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; margin-bottom: 10px; }
+  .qual-top  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .qual-lbl  { font-size: 11px; color: var(--muted2); }
+  .qual-badge { font-family: var(--mono); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; letter-spacing: 0.5px; }
+  .snr-track { height: 6px; background: var(--s3); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+  .snr-fill  { height: 100%; border-radius: 3px; transition: width 0.35s ease, background 0.35s ease; }
+  .snr-ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); font-family: var(--mono); }
+
+  /* ── MODE TABS ──── */
+  .mode-tabs { display: flex; gap: 3px; background: var(--s2); padding: 3px; border-radius: var(--r-sm); margin-bottom: 14px; }
+  .mode-tab  { flex:1; padding: 5px; font-size: 11px; font-family: var(--mono); font-weight: 500; text-align: center; border-radius: 5px; cursor: pointer; color: var(--muted); border: none; background: transparent; transition: all 0.15s; }
+  .mode-tab.active { background: var(--s4); color: var(--text); border: 1px solid var(--border2); }
+  .mode-tab:hover:not(.active) { color: var(--muted2); }
+
+  /* ── CONTROLS ───── */
+  .ctrl { margin-bottom: 18px; }
+  .ctrl-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; font-size: 12px; color: var(--muted2); gap: 6px; }
+  .ctrl-val { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text); background: var(--s3); border: 1px solid var(--border2); padding: 2px 8px; border-radius: 4px; min-width: 52px; text-align: center; flex-shrink: 0; }
+  input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; background: var(--s3); border-radius: 4px; outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--text); border: 2px solid var(--s1); cursor: pointer; transition: transform 0.1s; }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  .bit-meter { display: flex; gap: 2px; margin-top: 7px; }
+  .bit-bar   { flex: 1; height: 3px; border-radius: 2px; background: var(--s3); transition: background 0.2s; }
+  .bit-bar.on { background: var(--text); }
+  .div { height: 1px; background: var(--border); margin: 12px 0; }
+
+  /* ── CSV ────────── */
+  .upload-zone { display: none; border: 2px dashed rgba(255,255,255,0.1); border-radius: var(--r); padding: 20px 14px; text-align: center; cursor: pointer; transition: all 0.2s; background: rgba(255,255,255,0.02); position: relative; }
+  .upload-zone.active { display: block; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: rgba(255,255,255,0.28); background: rgba(255,255,255,0.04); }
+  .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-zone .up-icon { font-size: 22px; margin-bottom: 8px; display: block; }
+  .upload-zone strong { color: var(--text); font-size: 13px; display: block; margin-bottom: 4px; }
+  .upload-zone p { font-size: 11px; color: var(--muted2); line-height: 1.6; }
+  .csv-hint { display: none; background: var(--s2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 12px; font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 8px; line-height: 1.9; }
+  .csv-hint span { color: var(--muted2); }
+  .csv-status { display: none; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(74,222,128,0.07); border: 1px solid rgba(74,222,128,0.18); border-radius: var(--r-sm); font-size: 12px; color: var(--green); margin-top: 8px; }
+  .csv-status.visible { display: flex; }
+  .csv-clear { margin-left: auto; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 3px; }
+  .csv-clear:hover { color: var(--coral); }
+
+  /* ── CHARTS ─────── */
+  .charts-col { display: flex; flex-direction: column; gap: 12px; }
+  .chart-wrap { background: var(--s1); border: 1px solid var(--border); border-radius: var(--r); }
+  .chart-header { padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--s2); border-radius: var(--r) var(--r) 0 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .chart-title { display: flex; align-items: center; gap: 7px; }
+  .chart-title h3 { font-family: var(--mono); font-size: 10px; color: var(--muted2); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+  .legend { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted2); }
+  .legend-line { width: 14px; height: 2px; border-radius: 1px; }
+  .legend-dot  { width: 8px; height: 8px; border-radius: 50%; }
+  .rms-badge { font-family: var(--mono); font-size: 10px; color: var(--muted2); background: var(--s3); border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; }
+  .chart-canvas-wrap { padding: 10px 14px; }
+  canvas { display: block; }
+
+  .hidden { display: none !important; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+  .dot.pulse { animation: pulse 2s infinite; }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Single global tooltip — appended to body, never clipped -->
+<div id="g-tip">
+  <span class="gt-icon"  id="gt-icon"></span>
+  <div  class="gt-title" id="gt-title"></div>
+  <div  class="gt-body"  id="gt-body"></div>
+  <div  class="gt-arr"   id="gt-arr"></div>
+</div>
+
+<div class="app">
+  <header>
+    <h1>ADC Resolution &amp; Noise Simulator</h1>
+    <p>
+      Hover any <span style="border-bottom:1.5px dashed rgba(255,255,255,0.28);">underlined term</span> for an explanation &nbsp;·&nbsp;
+      <span class="tip" data-icon="🔄" data-title="Analog-to-Digital Conversion" data-body="The process of converting a continuous real-world signal (voltage, sound, temperature) into discrete digital numbers a computer can store and process.">Analog-to-Digital Conversion</span>
+      &nbsp;·&nbsp;
+      <span class="tip" data-icon="🔊" data-title="Quantization Noise" data-body="The rounding error that occurs when a continuous signal is forced into a fixed set of digital levels. Fewer levels = bigger gaps = more noise.">Quantization Noise</span>
+      &nbsp;·&nbsp;
+      <span class="tip" data-icon="📡" data-title="Oversampling" data-body="Sampling much faster than required, then averaging groups of samples. Random noise cancels out while the true signal survives. Every 4× = +1 effective bit.">Oversampling</span>
+    </p>
+  </header>
+
+  <div class="grid-main">
+
+    <!-- LEFT -->
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Levels</div>
+          <div class="stat-val" id="stat-levels">16</div>
+          <div class="stat-sub tip" data-icon="🎚️" data-title="Quantization Levels" data-body="Total discrete voltage steps = 2ⁿ. Doubling bit depth squares the number of levels, halving the step size and roughly halving the noise.">2ⁿ steps</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label tip" data-icon="📊" data-title="Signal-to-Noise Ratio" data-body="Ratio of signal power to noise power in dB. Higher = cleaner. Every extra bit adds ~6 dB. CD quality targets 96 dB.">SNR</div>
+          <div class="stat-val" id="stat-snr">25.8</div>
+          <div class="stat-sub">dB</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label tip" data-icon="🔢" data-title="Effective Number of Bits" data-body="Real resolution you achieve after oversampling. ENOB = bits + (log₂ of oversampling rate)/2. Oversampling lets cheap hardware perform like higher-end ADCs.">ENOB</div>
+          <div class="stat-val" id="stat-enob">4.0</div>
+          <div class="stat-sub">eff. bits</div>
+        </div>
+      </div>
+
+      <div class="qual-wrap">
+        <div class="qual-top">
+          <span class="qual-lbl">Signal quality</span>
+          <span class="qual-badge" id="q-badge">Poor</span>
+        </div>
+        <div class="snr-track"><div class="snr-fill" id="snr-fill" style="width:15%;background:var(--coral);"></div></div>
+        <div class="snr-ticks"><span>Noisy</span><span>FM</span><span>CD</span><span>Studio</span></div>
+      </div>
+
+      <!-- Signal source -->
+      <div class="panel">
+        <div class="panel-header"><div class="dot active pulse"></div><h2>Signal Source</h2></div>
+        <div class="panel-body">
+          <div class="mode-tabs">
+            <button class="mode-tab active" onclick="setMode('sine')"     id="tab-sine">Sine</button>
+            <button class="mode-tab"        onclick="setMode('square')"   id="tab-square">Square</button>
+            <button class="mode-tab"        onclick="setMode('sawtooth')" id="tab-sawtooth">Sawtooth</button>
+            <button class="mode-tab"        onclick="setMode('csv')"      id="tab-csv">CSV ↑</button>
+          </div>
+          <div id="freq-wrap" class="ctrl">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="〰️" data-title="Signal Frequency" data-body="Number of full cycles per second. Higher frequency = faster-changing signal. The ADC must sample at least 2× this rate (Nyquist theorem) to reconstruct it correctly.">Signal Frequency</span>
+              <span class="ctrl-val" id="freq-val">2 Hz</span>
+            </div>
+            <input type="range" id="freq" min="1" max="8" value="2" step="1" oninput="update()">
+          </div>
+          <div id="csv-zone" class="upload-zone">
+            <input type="file" id="csv-file" accept=".csv,.txt" onchange="loadCSV(this)">
+            <span class="up-icon">📂</span>
+            <strong>Drop CSV or click to browse</strong>
+            <p>Single column, or two columns (time, value)</p>
+          </div>
+          <div class="csv-hint" id="csv-hint">
+            <span>Format:</span> one number per line<br>
+            <span>e.g.</span> 0.12 / -0.45 / 0.87<br>
+            <span>Or:</span> 0.0,0.12 &nbsp;(time,value)
+          </div>
+          <div class="csv-status" id="csv-status">
+            <span id="csv-info">✓ loaded</span>
+            <button class="csv-clear" onclick="clearCSV()">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADC settings -->
+      <div class="panel">
+        <div class="panel-header"><div class="dot coral"></div><h2>ADC Settings</h2></div>
+        <div class="panel-body">
+          <div class="ctrl">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="🎚️" data-title="Bit Depth (Resolution)" data-body="Number of bits per sample. Controls how many discrete levels are available. Each extra bit halves the step size and adds ~6 dB SNR. Formula: Levels = 2ⁿ.">Bit Depth</span>
+              <span class="ctrl-val" id="bits-val">4-bit</span>
+            </div>
+            <input type="range" id="bits" min="2" max="16" value="4" step="1" oninput="update()">
+            <div class="bit-meter" id="bit-meter"></div>
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="📡" data-title="Oversampling Rate" data-body="How many times above the minimum rate we sample. Each 4× oversampling reduces noise variance by 4 (amplitude by 2), equivalent to gaining +1 bit of resolution.">Oversampling</span>
+              <span class="ctrl-val" id="os-val">1×</span>
+            </div>
+            <input type="range" id="osRate" min="0" max="6" value="0" step="1" oninput="update()">
+            <div style="display:flex;justify-content:space-between;margin-top:4px;">
+              <span style="font-size:10px;color:var(--muted);font-family:var(--mono);">1×</span>
+              <span style="font-size:10px;color:var(--muted);font-family:var(--mono);">64×</span>
+            </div>
+          </div>
+          <div class="div"></div>
+          <div class="ctrl" style="margin-bottom:0;">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="🌡️" data-title="Noise Floor" data-body="Background noise injected before the ADC — simulates real-world interference like thermal noise, EMI, or power supply ripple. This noise gets digitized along with the signal.">Noise Floor</span>
+              <span class="ctrl-val" id="noise-val">0%</span>
+            </div>
+            <input type="range" id="noiseFloor" min="0" max="30" value="0" step="1" oninput="update()">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="charts-col">
+
+      <div class="chart-wrap">
+        <div class="chart-header">
+          <div class="chart-title">
+            <div class="dot active"></div>
+            <h3>
+              <span class="tip" data-icon="🌊" data-title="Original Signal" data-body="The true continuous analog signal before any ADC processing. It is smooth because it can take any real value at any instant.">Original</span>
+              &nbsp;vs&nbsp;
+              <span class="tip" data-icon="🪜" data-title="Quantized Signal" data-body="The digital output of the ADC. The stepped 'staircase' shape appears because every sample is rounded to the nearest discrete level. More bits = smaller steps = smoother staircase.">Quantized</span>
+              &nbsp;Waveform
+            </h3>
+          </div>
+          <div class="legend">
+            <span class="legend-item"><span class="legend-line" style="background:var(--blue);"></span>Original</span>
+            <span class="legend-item"><span class="legend-line" style="background:var(--coral);"></span>Quantized</span>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap">
+          <div style="position:relative;height:190px;"><canvas id="waveChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <div class="chart-header">
+          <div class="chart-title">
+            <div class="dot coral"></div>
+            <h3>
+              <span class="tip" data-icon="📉" data-title="Quantization Error" data-body="The exact difference between the original and quantized value at each sample. This IS the noise added by the ADC. A flat low-amplitude scatter = good quality. Large spikes = bad quality.">Quantization Error</span>
+              &nbsp;— noise signal
+            </h3>
+          </div>
+          <span class="rms-badge" id="rms-badge">RMS: 0.0000</span>
+        </div>
+        <div class="chart-canvas-wrap">
+          <div style="position:relative;height:120px;"><canvas id="errorChart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <div class="chart-header">
+          <div class="chart-title">
+            <div class="dot green"></div>
+            <h3>
+              <span class="tip" data-icon="📊" data-title="SNR vs Bit Depth Graph" data-body="The green curve shows theoretical SNR for each bit depth at your current oversampling rate. Oversampling shifts the whole curve upward. The orange dot is where you are right now.">SNR</span>
+              &nbsp;vs Bit Depth
+            </h3>
+          </div>
+          <div class="legend">
+            <span class="legend-item"><span class="legend-line" style="background:var(--green);"></span>Theory curve</span>
+            <span class="legend-item"><span class="legend-dot" style="background:var(--coral);"></span>You are here</span>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap">
+          <div style="position:relative;height:140px;"><canvas id="snrChart"></canvas></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   GLOBAL TOOLTIP ENGINE
+   ═══════════════════════════════════════════════════════════════
+   WHY JS instead of CSS :hover + absolute child?
+   ─────────────────────────────────────────────
+   The previous CSS approach used:
+     .tip { position: relative; }
+     .tip-bubble { position: absolute; }
+   That works ONLY when no ancestor has overflow:hidden.
+   Our .panel divs do have overflow:hidden (for border-radius
+   clipping), so the bubble was cut off.
+
+   The fix: one #g-tip on <body>, always visible in the stacking
+   context, positioned via getBoundingClientRect() which returns
+   viewport-relative coordinates → use position:fixed.
+   Arrow x-position is adjusted so it always points at the word.
+═══════════════════════════════════════════════════════════════ */
+(function(){
+  const tip   = document.getElementById('g-tip');
+  const gtI   = document.getElementById('gt-icon');
+  const gtT   = document.getElementById('gt-title');
+  const gtB   = document.getElementById('gt-body');
+  const gtArr = document.getElementById('gt-arr');
+  let hideTimer = null;
+  const PAD = 10, GAP = 10, TIP_W = 240;
+
+  function positionTip(el) {
+    gtI.textContent = el.dataset.icon  || '';
+    gtT.textContent = el.dataset.title || '';
+    gtB.textContent = el.dataset.body  || '';
+    tip.style.display = 'block';
+    tip.classList.remove('show');
+
+    const r = el.getBoundingClientRect();
+    // Measure after content is set
+    const tipH = tip.offsetHeight;
+
+    // Horizontal: try to center on element
+    let left = r.left + r.width / 2 - TIP_W / 2;
+    left = Math.max(PAD, Math.min(left, window.innerWidth - TIP_W - PAD));
+
+    // Arrow: offset so it always points at the middle of the word
+    const wordMid  = r.left + r.width / 2;
+    const arrowX   = Math.max(14, Math.min(wordMid - left - 8, TIP_W - 22));
+    gtArr.style.left = arrowX + 'px';
+
+    // Vertical: prefer above, flip below if not enough room
+    let top, above = true;
+    if (r.top - tipH - GAP >= PAD) {
+      top = r.top - tipH - GAP;
+    } else {
+      top = r.bottom + GAP;
+      above = false;
+    }
+
+    // Arrow direction
+    if (above) {
+      gtArr.style.top = 'auto';
+      gtArr.style.bottom = '-8px';
+      gtArr.style.borderTop = '8px solid rgba(255,255,255,0.18)';
+      gtArr.style.borderBottom = 'none';
+    } else {
+      gtArr.style.bottom = 'auto';
+      gtArr.style.top = '-8px';
+      gtArr.style.borderBottom = '8px solid rgba(255,255,255,0.18)';
+      gtArr.style.borderTop = 'none';
+    }
+
+    tip.style.left = left + 'px';
+    tip.style.top  = top  + 'px';
+    requestAnimationFrame(() => tip.classList.add('show'));
+  }
+
+  function hideTip() {
+    hideTimer = setTimeout(() => {
+      tip.classList.remove('show');
+      setTimeout(() => { if (!tip.classList.contains('show')) tip.style.display = 'none'; }, 160);
+    }, 60);
+  }
+
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('.tip[data-title]');
+    if (!el) return;
+    clearTimeout(hideTimer);
+    positionTip(el);
+  });
+  document.addEventListener('mouseout', e => {
+    if (e.target.closest('.tip[data-title]')) hideTip();
+  });
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   ADC SIMULATOR CORE
+═══════════════════════════════════════════════════════════════ */
+let mode = 'sine', csvData = null;
+let waveChart, errorChart, snrChart;
+
+window.addEventListener('DOMContentLoaded', () => {
+  initBitMeter(); initCharts(); update();
+  const zone = document.getElementById('csv-zone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); if(e.dataTransfer.files[0]) processCSVFile(e.dataTransfer.files[0]); });
+});
+
+function setMode(m) {
+  mode = m;
+  ['sine','square','sawtooth','csv'].forEach(k => document.getElementById('tab-'+k).classList.toggle('active', k===m));
+  const isCSV = m === 'csv';
+  document.getElementById('csv-zone').classList.toggle('active', isCSV);
+  document.getElementById('freq-wrap').classList.toggle('hidden', isCSV);
+  document.getElementById('csv-hint').style.display = (isCSV && !csvData) ? 'block' : 'none';
+  if (!isCSV) clearCSV(); else update();
+}
+
+function loadCSV(inp) { if (inp.files[0]) processCSVFile(inp.files[0]); }
+function processCSVFile(file) {
+  const r = new FileReader();
+  r.onload = e => {
+    const lines = e.target.result.trim().split(/\r?\n/).filter(l=>l.trim());
+    const vals = [];
+    lines.forEach(l => { const p = l.split(/[,;\t]/); const n = parseFloat(p.length>1?p[1]:p[0]); if(!isNaN(n)) vals.push(n); });
+    if (vals.length < 4) { alert('Need at least 4 numeric values.'); return; }
+    const mn=Math.min(...vals), mx=Math.max(...vals), rng=mx-mn||1;
+    csvData = vals.map(v => ((v-mn)/rng)*2-1);
+    document.getElementById('csv-info').textContent = `✓ ${csvData.length} samples loaded`;
+    document.getElementById('csv-status').classList.add('visible');
+    document.getElementById('csv-hint').style.display = 'none';
+    update();
+  };
+  r.readAsText(file);
+}
+function clearCSV() {
+  csvData = null;
+  document.getElementById('csv-status').classList.remove('visible');
+  document.getElementById('csv-file').value = '';
+  document.getElementById('csv-hint').style.display = mode==='csv' ? 'block' : 'none';
+  update();
+}
+
+/* ─────────────────────────────────────────────────────────────
+   SIGNAL GENERATION
+   ─────────────────────────────────────────────────────────────
+   Produces N samples normalised to [-1, +1].
+
+   Sine     → sin(2πft)         single-frequency reference
+   Square   → sign(sin(2πft))   tests ADC on hard transitions
+   Sawtooth → 2·frac(ft) − 1    rich harmonic content, full range
+   CSV      → linear resample of user data to exactly N points
+              (lerp between adjacent user samples)
+*/
+function genSignal(N, wm, freq) {
+  const xs = Array.from({length:N}, (_,i) => i/N);
+  if (wm==='csv' && csvData) {
+    return xs.map((_,i) => {
+      const idx=(i/N)*(csvData.length-1), lo=Math.floor(idx), hi=Math.min(lo+1,csvData.length-1);
+      return csvData[lo]+(csvData[hi]-csvData[lo])*(idx-lo);
+    });
+  }
+  if (wm==='square')   return xs.map(x => Math.sin(2*Math.PI*freq*x)>=0 ? 0.9 : -0.9);
+  if (wm==='sawtooth') return xs.map(x => 2*((freq*x)%1)-1);
+  return xs.map(x => Math.sin(2*Math.PI*freq*x));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ADC QUANTIZATION ALGORITHM
+   ─────────────────────────────────────────────────────────────
+   MIDTREAD UNIFORM QUANTIZATION:
+     step  = 2 / 2ⁿ      ← one level's width in [-1,+1]
+     Q[i]  = round(x[i] / step) × step
+   This rounds each sample to the nearest level — the same
+   operation every real ADC chip performs in hardware.
+
+   OVERSAMPLING + DECIMATION:
+     1. Generate N×osRate super-samples of the same signal
+        (each with independent noise added)
+     2. Quantize every super-sample with the same midtread rule
+     3. Average every group of osRate quantized super-samples
+        back down to N output points
+   The averaging is the key: quantization errors on independent
+   samples are uncorrelated → they average toward zero while the
+   true signal (correlated across samples) is preserved.
+   Noise variance drops by factor osRate → amplitude by √osRate.
+
+   THEORETICAL SNR:
+     SNR = 6.02×n + 1.76 + 10·log₁₀(osRate)  dB
+   First two terms: SQNR of ideal n-bit ADC.
+   Third term: oversampling processing gain.
+*/
+function buildData(bits, osExp, freq, noisePct) {
+  const N = 250, osRate = Math.pow(2, osExp);
+  const levels = Math.pow(2, bits), step = 2/levels;
+  const noiseAmp = (noisePct/100)*0.3;
+  const eff = (mode==='csv' && !csvData) ? 'sine' : mode;
+  const orig  = genSignal(N, eff, freq);
+  const noisy = orig.map(v => v + (Math.random()-0.5)*2*noiseAmp);
+
+  let q;
+  if (osRate===1) {
+    q = noisy.map(v => Math.round(Math.max(-1,Math.min(1,v))/step)*step);
+  } else {
+    const sN = N*osRate;
+    const sxs = Array.from({length:sN},(_,i)=>i/sN);
+    let ss;
+    if (eff==='csv' && csvData) {
+      ss = sxs.map((_,i)=>{ const idx=(i/sN)*(csvData.length-1),lo=Math.floor(idx),hi=Math.min(lo+1,csvData.length-1); return csvData[lo]+(csvData[hi]-csvData[lo])*(idx-lo)+(Math.random()-0.5)*2*noiseAmp; });
+    } else if (eff==='square')   { ss = sxs.map(x=>(Math.sin(2*Math.PI*freq*x)>=0?0.9:-0.9)+(Math.random()-0.5)*2*noiseAmp); }
+    else if (eff==='sawtooth') { ss = sxs.map(x=>(2*((freq*x)%1)-1)+(Math.random()-0.5)*2*noiseAmp); }
+    else                       { ss = sxs.map(x=>Math.sin(2*Math.PI*freq*x)+(Math.random()-0.5)*2*noiseAmp); }
+    const sq = ss.map(v=>Math.round(Math.max(-1,Math.min(1,v))/step)*step);
+    q = [];
+    for (let i=0;i<N;i++) { let s=0; for(let j=0;j<osRate;j++) s+=sq[i*osRate+j]; q.push(s/osRate); }
+  }
+
+  const errors = orig.map((v,i)=>q[i]-v);
+  const rms    = Math.sqrt(errors.reduce((s,e)=>s+e*e,0)/errors.length);
+  const snr    = 6.02*bits + 1.76 + 10*Math.log10(osRate);
+  return { original:orig, quantized:q, errors, levels, snr, enob:bits+osExp/2, rms };
+}
+
+function initBitMeter() {
+  const m = document.getElementById('bit-meter');
+  for(let i=0;i<16;i++){ const b=document.createElement('div'); b.className='bit-bar'; b.id='bb-'+i; m.appendChild(b); }
+}
+function updateBitMeter(bits) { for(let i=0;i<16;i++) document.getElementById('bb-'+i).classList.toggle('on',i<bits); }
+
+function qualityInfo(snr) {
+  if (snr<30) return {label:'Poor',     col:'#ef4444'};
+  if (snr<50) return {label:'Fair',     col:'#f97316'};
+  if (snr<70) return {label:'Good',     col:'#eab308'};
+  if (snr<90) return {label:'CD Quality',col:'#5b9cf6'};
+  return             {label:'Studio',   col:'#4ade80'};
+}
+
+function update() {
+  const bits=+document.getElementById('bits').value,
+        osExp=+document.getElementById('osRate').value,
+        freq=+document.getElementById('freq').value,
+        noise=+document.getElementById('noiseFloor').value,
+        osRate=Math.pow(2,osExp);
+
+  document.getElementById('bits-val').textContent  = bits+'-bit';
+  document.getElementById('os-val').textContent    = osRate+'×';
+  document.getElementById('freq-val').textContent  = freq+' Hz';
+  document.getElementById('noise-val').textContent = noise+'%';
+  updateBitMeter(bits);
+
+  const d = buildData(bits, osExp, freq, noise);
+  document.getElementById('stat-levels').textContent = d.levels.toLocaleString();
+  document.getElementById('stat-snr').textContent    = d.snr.toFixed(1);
+  document.getElementById('stat-enob').textContent   = d.enob.toFixed(1);
+  document.getElementById('rms-badge').textContent   = 'RMS error: '+d.rms.toFixed(4);
+
+  const qi = qualityInfo(d.snr);
+  const badge = document.getElementById('q-badge');
+  badge.textContent = qi.label;
+  badge.style.cssText = `background:${qi.col}1a;color:${qi.col};border:1px solid ${qi.col}44;font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:.5px;`;
+
+  const pct = Math.min(100, Math.max(0, (d.snr-20)/80*100));
+  document.getElementById('snr-fill').style.width = pct+'%';
+  document.getElementById('snr-fill').style.background = qi.col;
+
+  const L = Array.from({length:d.original.length},(_,i)=>i);
+  waveChart.data.labels=L; waveChart.data.datasets[0].data=d.original; waveChart.data.datasets[1].data=d.quantized; waveChart.update('none');
+  errorChart.data.labels=L; errorChart.data.datasets[0].data=d.errors; errorChart.update('none');
+  const curve = Array.from({length:17},(_,b)=>b===0?null:parseFloat((6.02*b+1.76+10*Math.log10(osRate)).toFixed(1)));
+  snrChart.data.datasets[0].data = curve;
+  snrChart.data.datasets[1].data = Array.from({length:17},(_,i)=>i===bits?parseFloat(d.snr.toFixed(1)):null);
+  snrChart.update('none');
+}
+
+function initCharts() {
+  const grid='rgba(255,255,255,0.05)', tick='#555';
+  const base = {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#232323', borderColor:'rgba(255,255,255,0.15)', borderWidth:1, titleColor:'#e8e8e8', bodyColor:'#888', padding:10, cornerRadius:8 } },
+    scales:{ x:{display:false}, y:{ ticks:{color:tick,font:{family:'JetBrains Mono',size:10},maxTicksLimit:5}, grid:{color:grid}, border:{display:false} } }
+  };
+
+  waveChart = new Chart(document.getElementById('waveChart'), {
+    type:'line', data:{ labels:[], datasets:[
+      {label:'Original', data:[], borderColor:'#5b9cf6', borderWidth:1.5, pointRadius:0, tension:0.4},
+      {label:'Quantized',data:[], borderColor:'#f97316', borderWidth:2,   pointRadius:0, tension:0, stepped:true}
+    ]},
+    options:{...base, scales:{...base.scales, y:{...base.scales.y,min:-1.4,max:1.4}}}
+  });
+
+  errorChart = new Chart(document.getElementById('errorChart'), {
+    type:'line', data:{ labels:[], datasets:[{label:'Error',data:[],borderColor:'#f87171',borderWidth:1,pointRadius:0,fill:true,backgroundColor:'rgba(248,113,113,0.07)'}] },
+    options:{...base}
+  });
+
+  snrChart = new Chart(document.getElementById('snrChart'), {
+    type:'line',
+    data:{ labels:Array.from({length:17},(_,i)=>i), datasets:[
+      {label:'SNR',    data:[], borderColor:'#4ade80', borderWidth:2, pointRadius:0, tension:0.3, fill:true, backgroundColor:'rgba(74,222,128,0.04)'},
+      {label:'Current',data:[], backgroundColor:'#f97316', borderColor:'#f97316', pointRadius:8, pointHoverRadius:10, type:'scatter', showLine:false}
+    ]},
+    options:{...base, scales:{
+      x:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10}},grid:{color:grid},border:{display:false},title:{display:true,text:'bits',color:tick,font:{family:'JetBrains Mono',size:10}}},
+      y:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10},callback:v=>v+' dB',maxTicksLimit:5},grid:{color:grid},border:{display:false}}
+    }}
+  });
+}
+</script>
+</body>
+</html>
