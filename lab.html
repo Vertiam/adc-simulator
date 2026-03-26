@@ -78,6 +78,45 @@
   @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
   .dot-pulse { animation: pulse 2s infinite; }
 
+  /* ── VALIDATION ── */
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    15%     { transform: translateX(-6px); }
+    30%     { transform: translateX(6px); }
+    45%     { transform: translateX(-4px); }
+    60%     { transform: translateX(4px); }
+    75%     { transform: translateX(-2px); }
+    90%     { transform: translateX(2px); }
+  }
+  .field-error .form-input {
+    border-color: rgba(248,113,113,0.7) !important;
+    background: rgba(248,113,113,0.05) !important;
+    animation: shake 0.45s ease;
+  }
+  .field-error .form-label { color: var(--red) !important; }
+  .field-err-msg {
+    font-size: 11px; color: var(--red); margin-top: 5px;
+    display: none; font-family: var(--mono);
+  }
+  .field-error .field-err-msg { display: block; }
+  .form-input.valid-field {
+    border-color: rgba(74,222,128,0.4) !important;
+  }
+  #step1-error {
+    display: none;
+    align-items: center; gap: 8px;
+    padding: 10px 14px; margin-top: 16px;
+    background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.25);
+    border-radius: var(--r-sm);
+    font-size: 13px; color: var(--red);
+    animation: shake 0.45s ease;
+  }
+  #step1-error.visible { display: flex; }
+  /* Lock icon on step bar items when not yet reachable */
+  .step-item.locked { opacity: 0.4; cursor: not-allowed; }
+  .step-item.locked:hover { color: var(--muted2) !important; }
+
   /* ── TOOLTIP (fixed JS-positioned) ── */
   #g-tip { display:none;position:fixed;z-index:99999;pointer-events:none;opacity:0;transition:opacity 0.15s ease,transform 0.15s ease;transform:translateY(6px);width:240px;background:#232323;border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:13px 15px;box-shadow:0 16px 48px rgba(0,0,0,0.7); }
   #g-tip.show { opacity:1;transform:translateY(0); }
@@ -135,21 +174,25 @@
       <div class="card-header"><div class="dot dot-white dot-pulse"></div><h3>Student Information</h3></div>
       <div class="card-body" style="display:flex;flex-direction:column;gap:0;">
         <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">Full Name *</label>
-            <input class="form-input" id="s-name" type="text" placeholder="e.g. Joe Gibbs">
+          <div class="form-group" id="fg-name">
+            <label class="form-label">Full Name <span style="color:var(--red);">*</span></label>
+            <input class="form-input" id="s-name" type="text" placeholder="e.g. Swayam Marfatia" oninput="liveValidate('s-name','fg-name')">
+            <div class="field-err-msg">Full name is required</div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Registration Number *</label>
-            <input class="form-input" id="s-reg" type="text" placeholder="e.g. RA25XXXXXXXXXXX">
+          <div class="form-group" id="fg-reg">
+            <label class="form-label">Registration Number <span style="color:var(--red);">*</span></label>
+            <input class="form-input" id="s-reg" type="text" placeholder="e.g. RA2511002010080" oninput="liveValidate('s-reg','fg-reg')">
+            <div class="field-err-msg">Registration number is required</div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Department</label>
-            <input class="form-input" id="s-dept" type="text" value="Mechanical Engineering">
+          <div class="form-group" id="fg-dept">
+            <label class="form-label">Department <span style="color:var(--red);">*</span></label>
+            <input class="form-input" id="s-dept" type="text" value="Mechanical Engineering" oninput="liveValidate('s-dept','fg-dept')">
+            <div class="field-err-msg">Department is required</div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Date</label>
-            <input class="form-input" id="s-date" type="date">
+          <div class="form-group" id="fg-date">
+            <label class="form-label">Date <span style="color:var(--red);">*</span></label>
+            <input class="form-input" id="s-date" type="date" oninput="liveValidate('s-date','fg-date')">
+            <div class="field-err-msg">Date is required</div>
           </div>
           <div class="form-group">
             <label class="form-label">Experiment Title</label>
@@ -157,8 +200,13 @@
           </div>
           <div class="form-group">
             <label class="form-label">Section / Batch</label>
-            <input class="form-input" id="s-batch" type="text" placeholder="e.g. Section A/Batch 2">
+            <input class="form-input" id="s-batch" type="text" placeholder="e.g. Section B">
           </div>
+        </div>
+        <!-- Validation error banner -->
+        <div id="step1-error">
+          <span>⚠️</span>
+          <span id="step1-error-text">Please fill in all required fields before continuing.</span>
         </div>
       </div>
     </div>
@@ -604,6 +652,77 @@ Oversampling: Sampling M times faster and averaging. Each 4× oversampling adds 
 })();
 
 /* ════════════════════════════════════════════════════════
+   STEP 1 VALIDATION
+   ─────────────────────────────────────────────────────
+   Required fields: name, reg, dept, date.
+   validateStep1() checks each, marks .field-error on
+   failing groups, shows the error banner, and returns
+   false so nextStep() blocks navigation.
+   liveValidate() clears error state as the user types,
+   giving instant positive feedback (green border).
+════════════════════════════════════════════════════════ */
+const REQUIRED_FIELDS = [
+  { id: 's-name', group: 'fg-name', label: 'Full Name' },
+  { id: 's-reg',  group: 'fg-reg',  label: 'Registration Number' },
+  { id: 's-dept', group: 'fg-dept', label: 'Department' },
+  { id: 's-date', group: 'fg-date', label: 'Date' },
+];
+
+function validateStep1() {
+  let valid = true;
+  const missing = [];
+
+  REQUIRED_FIELDS.forEach(f => {
+    const input = document.getElementById(f.id);
+    const group = document.getElementById(f.group);
+    const val = input.value.trim();
+    if (!val) {
+      group.classList.add('field-error');
+      input.classList.remove('valid-field');
+      missing.push(f.label);
+      valid = false;
+    } else {
+      group.classList.remove('field-error');
+      input.classList.add('valid-field');
+    }
+  });
+
+  const banner = document.getElementById('step1-error');
+  const bannerText = document.getElementById('step1-error-text');
+  if (!valid) {
+    bannerText.textContent = `Please fill in: ${missing.join(', ')}`;
+    banner.classList.add('visible');
+    // Re-trigger shake by cloning the node
+    banner.style.animation = 'none';
+    requestAnimationFrame(() => { banner.style.animation = ''; });
+    // Scroll the first failing field into view
+    const firstBad = document.getElementById(REQUIRED_FIELDS.find(f => missing.includes(f.label)).id);
+    firstBad.focus();
+    firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    banner.classList.remove('visible');
+  }
+  return valid;
+}
+
+/* Clear error state and show green border as user types */
+function liveValidate(inputId, groupId) {
+  const val = document.getElementById(inputId).value.trim();
+  const group = document.getElementById(groupId);
+  const input = document.getElementById(inputId);
+  if (val) {
+    group.classList.remove('field-error');
+    input.classList.add('valid-field');
+    // Hide banner if all required are now filled
+    if (REQUIRED_FIELDS.every(f => document.getElementById(f.id).value.trim())) {
+      document.getElementById('step1-error').classList.remove('visible');
+    }
+  } else {
+    input.classList.remove('valid-field');
+  }
+}
+
+/* ════════════════════════════════════════════════════════
    STEP NAVIGATION
 ════════════════════════════════════════════════════════ */
 let currentStep = 1;
@@ -611,13 +730,22 @@ const TOTAL_STEPS = 5;
 const stepDone = [false,false,false,false,false];
 
 function goStep(n) {
+  // Block clicking ahead on the step bar if Step 1 is not yet complete
+  if (n > 1 && !stepDone[0]) {
+    validateStep1();   // highlight what's missing
+    return;
+  }
+  // Block skipping ahead beyond the furthest completed step
+  const maxReachable = stepDone.lastIndexOf(true) + 2;  // one beyond last done
+  if (n > maxReachable) return;
+
   document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('step'+n).classList.add('active');
   document.querySelectorAll('.step-item').forEach((el,i) => {
-    el.classList.remove('active');
-    if (i+1 === n) el.classList.add('active');
+    el.classList.remove('active','locked');
+    if (i+1 === n)       el.classList.add('active');
     else if (stepDone[i]) el.classList.add('done');
-    else el.classList.remove('done');
+    else if (i+1 > maxReachable) el.classList.add('locked');
   });
   document.getElementById('btn-back').style.display = n > 1 ? '' : 'none';
   document.getElementById('btn-next').textContent = n === TOTAL_STEPS ? '✓ Done' : 'Next →';
@@ -625,13 +753,20 @@ function goStep(n) {
   if (n === 5) buildReport();
   window.scrollTo(0, 0);
 }
+
 function nextStep() {
-  if (currentStep === 1) { saveStudentInfo(); stepDone[0] = true; }
+  // Gate: Step 1 requires valid fields before proceeding
+  if (currentStep === 1) {
+    if (!validateStep1()) return;   // stay on Step 1 if invalid
+    saveStudentInfo();
+    stepDone[0] = true;
+  }
   if (currentStep === 2) { stepDone[1] = true; }
   if (currentStep === 3) { stepDone[2] = true; }
   if (currentStep === 4) { saveNotebook(); stepDone[3] = true; }
   if (currentStep < TOTAL_STEPS) goStep(currentStep + 1);
 }
+
 function prevStep() { if (currentStep > 1) goStep(currentStep - 1); }
 
 /* ════════════════════════════════════════════════════════
@@ -674,6 +809,12 @@ function loadSaved() {
     if (d.calc)    document.getElementById('nb-calc').value   = d.calc;
     if (d.conclusion) document.getElementById('nb-conclusion').value = d.conclusion;
     if (d.readings) { readings = d.readings; renderReadingsTable(); }
+    // Re-apply green borders for any fields already filled from saved data
+    REQUIRED_FIELDS.forEach(f => {
+      if (document.getElementById(f.id).value.trim()) {
+        document.getElementById(f.id).classList.add('valid-field');
+      }
+    });
   } catch(e) {}
 }
 function saveStudentInfo() { saveAll(); }
