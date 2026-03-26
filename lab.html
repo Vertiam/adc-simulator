@@ -176,17 +176,17 @@
         <div class="form-grid">
           <div class="form-group" id="fg-name">
             <label class="form-label">Full Name <span style="color:var(--red);">*</span></label>
-            <input class="form-input" id="s-name" type="text" placeholder="e.g. Swayam Marfatia" oninput="liveValidate('s-name','fg-name')">
+            <input class="form-input" id="s-name" type="text" placeholder="e.g. Joe Gibbs" oninput="liveValidate('s-name','fg-name')">
             <div class="field-err-msg">Full name is required</div>
           </div>
           <div class="form-group" id="fg-reg">
             <label class="form-label">Registration Number <span style="color:var(--red);">*</span></label>
-            <input class="form-input" id="s-reg" type="text" placeholder="e.g. RA2511002010080" oninput="liveValidate('s-reg','fg-reg')">
+            <input class="form-input" id="s-reg" type="text" placeholder="e.g. RA25XXXXXXXXXXX" oninput="liveValidate('s-reg','fg-reg')">
             <div class="field-err-msg">Registration number is required</div>
           </div>
           <div class="form-group" id="fg-dept">
             <label class="form-label">Department <span style="color:var(--red);">*</span></label>
-            <input class="form-input" id="s-dept" type="text" value="Mechanical Engineering" oninput="liveValidate('s-dept','fg-dept')">
+            <input class="form-input" id="s-dept" type="text" placeholder="e.g. Mechanical Engineering" oninput="liveValidate('s-dept','fg-dept')">
             <div class="field-err-msg">Department is required</div>
           </div>
           <div class="form-group" id="fg-date">
@@ -199,8 +199,8 @@
             <input class="form-input" id="s-title" type="text" value="ADC Resolution & Noise Simulator">
           </div>
           <div class="form-group">
-            <label class="form-label">Section / Batch</label>
-            <input class="form-input" id="s-batch" type="text" placeholder="e.g. Section B">
+            <label class="form-label">Section </label>
+            <input class="form-input" id="s-batch" type="text" placeholder="e.g. B ">
           </div>
         </div>
         <!-- Validation error banner -->
@@ -757,14 +757,67 @@ function goStep(n) {
 function nextStep() {
   // Gate: Step 1 requires valid fields before proceeding
   if (currentStep === 1) {
-    if (!validateStep1()) return;   // stay on Step 1 if invalid
+    if (!validateStep1()) return;
     saveStudentInfo();
     stepDone[0] = true;
   }
   if (currentStep === 2) { stepDone[1] = true; }
   if (currentStep === 3) { stepDone[2] = true; }
   if (currentStep === 4) { saveNotebook(); stepDone[3] = true; }
-  if (currentStep < TOTAL_STEPS) goStep(currentStep + 1);
+
+  // On the final step, Done → show completion flash then go home
+  if (currentStep === TOTAL_STEPS) {
+    stepDone[4] = true;
+    saveAll();
+    showCompletionAndRedirect();
+    return;
+  }
+  goStep(currentStep + 1);
+}
+
+function showCompletionAndRedirect() {
+  // Build a fullscreen overlay, fade it in, then redirect
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 999999;
+    background: #0f0f0f;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 20px;
+    opacity: 0; transition: opacity 0.4s ease;
+  `;
+  overlay.innerHTML = `
+    <div style="font-size:56px;animation:popIn 0.4s cubic-bezier(.175,.885,.32,1.275) 0.3s both;">✅</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:#e8e8e8;text-align:center;">
+      Experiment Complete
+    </div>
+    <div style="font-size:14px;color:#888;text-align:center;max-width:320px;line-height:1.7;">
+      Your lab report has been saved.<br>Returning to home page…
+    </div>
+    <div style="width:200px;height:3px;background:#2c2c2c;border-radius:2px;margin-top:8px;overflow:hidden;">
+      <div id="prog-bar" style="height:100%;width:0%;background:#4ade80;border-radius:2px;transition:width 2s linear;"></div>
+    </div>
+    <style>
+      @keyframes popIn {
+        from { transform: scale(0.5); opacity: 0; }
+        to   { transform: scale(1);   opacity: 1; }
+      }
+    </style>
+  `;
+  document.body.appendChild(overlay);
+
+  // Fade in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      overlay.style.opacity = '1';
+      // Start progress bar after a tick
+      setTimeout(() => {
+        document.getElementById('prog-bar').style.width = '100%';
+      }, 50);
+    });
+  });
+
+  // Redirect after 2.2 seconds
+  setTimeout(() => { window.location.href = 'index.html'; }, 2200);
 }
 
 function prevStep() { if (currentStep > 1) goStep(currentStep - 1); }
