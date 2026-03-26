@@ -119,7 +119,7 @@
   .step-item.locked { opacity: 0.4; cursor: not-allowed; }
   .step-item.locked:hover { color: var(--muted2) !important; }
 
-  /* ── TOOLTIP  ── */
+  /* ── TOOLTIP (fixed JS-positioned) ── */
   #g-tip { display:none;position:fixed;z-index:99999;pointer-events:none;opacity:0;transition:opacity 0.15s ease,transform 0.15s ease;transform:translateY(6px);width:240px;background:#232323;border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:13px 15px;box-shadow:0 16px 48px rgba(0,0,0,0.7); }
   #g-tip.show { opacity:1;transform:translateY(0); }
   #g-tip .gt-icon  { font-size:20px;display:block;margin-bottom:6px; }
@@ -139,18 +139,30 @@
     transition:all 0.15s; flex-shrink:0; line-height:1;
   }
   .ct-btn:hover { background:var(--s4); color:var(--text); border-color:var(--border2); }
-  .ct-btn.zoom-active  { background:rgba(91,156,246,0.15);  border-color:rgba(91,156,246,0.4);  color:#5b9cf6; }
-  .ct-btn.mark-active  { background:rgba(251,191,36,0.15);  border-color:rgba(251,191,36,0.4);  color:#fbbf24; }
+  .ct-btn.zoom-active { background:rgba(91,156,246,0.15); border-color:rgba(91,156,246,0.4); color:#5b9cf6; }
+  .ct-btn.mark-active { background:rgba(251,191,36,0.15); border-color:rgba(251,191,36,0.4); color:#fbbf24; }
   .ct-sep { width:1px; height:14px; background:var(--border2); margin:0 2px; flex-shrink:0; }
-  /* tiny tooltip on hover */
-  .ct-btn::after {
-    content:attr(data-tip); position:absolute; bottom:calc(100% + 6px); left:50%;
-    transform:translateX(-50%); background:#1a1a1a; color:var(--muted3);
-    font-size:10px; font-family:var(--mono); padding:3px 7px; border-radius:4px;
-    white-space:nowrap; pointer-events:none; opacity:0; transition:opacity 0.15s;
-    border:1px solid var(--border2); z-index:500;
+
+  /* Override card overflow so toolbar tooltips are never clipped */
+  .charts-col .card { overflow: visible; }
+  /* Chart header needs its own bg + radius since card overflow is now visible */
+  .charts-col .card .chart-header {
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
   }
-  .ct-btn:hover::after { opacity:1; }
+  /* Canvas wrap and inner divs must stay clipped to avoid chart bleeding */
+  .charts-col .chart-canvas-wrap { overflow: hidden; }
+
+  /* Toolbar mini-tooltip — fixed position via JS, shown on ct-btn hover */
+  #ct-tip {
+    position: fixed; z-index: 99998; pointer-events: none;
+    opacity: 0; transition: opacity 0.12s ease;
+    background: #1a1a1a; color: #aaa;
+    font-size: 10px; font-family: var(--mono);
+    padding: 4px 9px; border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.14);
+    white-space: nowrap;
+  }
+  #ct-tip.show { opacity: 1; }
 
   /* ── ZOOM INFO BAR ── */
   .zoom-bar {
@@ -183,13 +195,15 @@
 </head>
 <body>
 
-<!-- Global tooltip -->
+<!-- Global tooltip for .tip terms -->
 <div id="g-tip">
   <span class="gt-icon"  id="gt-icon"></span>
   <div  class="gt-title" id="gt-title"></div>
   <div  class="gt-body"  id="gt-body"></div>
   <div  class="gt-arr"   id="gt-arr"></div>
 </div>
+<!-- Toolbar mini-tooltip (fixed, never clipped) -->
+<div id="ct-tip"></div>
 
 <nav>
   <a href="index.html" class="nav-logo"><span class="logo-dot"></span>ADC Lab</a>
@@ -291,7 +305,7 @@
       <div class="card-body">
         <div class="alert alert-warn" style="margin-bottom:16px;">
           <span>⚠️</span>
-          <span>Requires microphone permission.</span>
+          <span>Requires microphone permission. Works on HTTPS (the hosted site) — not on local file://</span>
         </div>
         <canvas id="mic-canvas"></canvas>
         <div style="display:flex;align-items:center;gap:16px;margin-top:16px;justify-content:center;flex-wrap:wrap;">
@@ -578,7 +592,7 @@
           </tr>
         </thead>
         <tbody id="readings-body">
-          <tr><td colspan="10" class="empty-state">No readings yet : adjust the sliders and click "Record This Reading"</td></tr>
+          <tr><td colspan="10" class="empty-state">No readings yet — adjust the sliders and click "Record This Reading"</td></tr>
         </tbody>
       </table>
     </div>
@@ -750,6 +764,38 @@ Oversampling: Sampling M times faster and averaging. Each 4× oversampling adds 
   function hide(){hT=setTimeout(()=>{tip.classList.remove('show');setTimeout(()=>{if(!tip.classList.contains('show'))tip.style.display='none';},160);},60);}
   document.addEventListener('mouseover',e=>{const el=e.target.closest('.tip[data-title]');if(!el)return;clearTimeout(hT);pos(el);});
   document.addEventListener('mouseout', e=>{if(e.target.closest('.tip[data-title]'))hide();});
+})();
+
+/* ── TOOLBAR MINI-TOOLTIP ENGINE ────────────────────────────────
+   Uses position:fixed so it is NEVER clipped by card overflow:hidden.
+   Reads data-tip attribute from .ct-btn elements.
+   Appears BELOW the button (into open space), not above (which
+   would clip into the card header background or outside the card).
+────────────────────────────────────────────────────────────────── */
+(function(){
+  const tip = document.getElementById('ct-tip');
+  let hT = null;
+  document.addEventListener('mouseover', e => {
+    const btn = e.target.closest('.ct-btn[data-tip]');
+    if (!btn) return;
+    clearTimeout(hT);
+    const label = btn.getAttribute('data-tip');
+    if (!label) return;
+    tip.textContent = label;
+    tip.classList.add('show');
+    const r = btn.getBoundingClientRect();
+    // Position below the button, centred
+    let left = r.left + r.width / 2 - tip.offsetWidth / 2;
+    // Clamp to viewport edges with 8px margin
+    left = Math.max(8, Math.min(left, window.innerWidth - tip.offsetWidth - 8));
+    const top = r.bottom + 6;
+    tip.style.left = left + 'px';
+    tip.style.top  = top  + 'px';
+  });
+  document.addEventListener('mouseout', e => {
+    if (!e.target.closest('.ct-btn[data-tip]')) return;
+    hT = setTimeout(() => tip.classList.remove('show'), 60);
+  });
 })();
 
 /* ════════════════════════════════════════════════════════
@@ -1274,6 +1320,17 @@ function canvasOf(id) {
   return id==='wave' ? 'waveChart' : id==='error' ? 'errorChart' : 'snrChart';
 }
 
+/* ════════════════════════════════════════════════════════
+   ZOOM  (chartjs-plugin-zoom)
+   ─────────────────────────────────────────────────────
+   doZoom(id, factor):  >1 = zoom in, <1 = zoom out.
+     Calls chart.zoom(factor) which the plugin provides.
+     Waveform + error: x-axis only (preserve y reference).
+     SNR: x+y so students can isolate a bit-depth range.
+   doReset(id): chart.resetZoom() restores full range.
+   updateZoomBar(): shows the current sample window below
+     the chart and reveals the "reset zoom" link.
+════════════════════════════════════════════════════════ */
 function doZoom(id, factor) {
   const c = chartOf(id);
   if (!c) return;
@@ -1302,6 +1359,20 @@ function updateZoomBar(id) {
 
 /* ════════════════════════════════════════════════════════
    MARKERS
+   ─────────────────────────────────────────────────────
+   toggleMarker(id): activates "placement mode" for that
+     chart — changes cursor to crosshair, highlights button.
+   onChartClick: when placement mode is active, converts
+     the pixel click to a data-index using
+     chart.scales.x.getValueForPixel(), stores the marker,
+     re-renders the list beneath the chart, and auto-exits
+     placement mode so one click = one marker.
+   renderMarkers(id): rebuilds the <div> list of markers
+     below the chart. Each row shows a color swatch, an
+     editable label field, x/y coordinates, and a delete ✕.
+   markerPlugin: Chart.js afterDraw plugin that draws a
+     vertical dashed line + diamond + label for every marker.
+     Color-cycles through 6 distinct hues.
 ════════════════════════════════════════════════════════ */
 const MK_COLORS = ['#fbbf24','#a78bfa','#34d399','#f472b6','#60a5fa','#fb923c'];
 const mkData    = { wave:[], error:[], snr:[] };
@@ -1389,6 +1460,11 @@ function renderMarkers(id) {
 
 /* ════════════════════════════════════════════════════════
    DOWNLOAD CHART AS PNG
+   ─────────────────────────────────────────────────────
+   Chart.js uses a transparent canvas. dlChart() draws it
+   onto an off-screen canvas with a solid dark fill first,
+   then triggers a .png download via a blob URL. Markers
+   and current zoom state are captured exactly as-is.
 ════════════════════════════════════════════════════════ */
 function dlChart(canvasId, name) {
   const src = document.getElementById(canvasId);
