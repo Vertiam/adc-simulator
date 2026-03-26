@@ -1,16 +1,21 @@
-# ADC Resolution & Noise Simulator
-### Quantum Hackathon Track #4 PS_19 — Signal Processing & Digital Electronics
+# ⚡ ADC Resolution & Noise — Signal Processing Lab
+### Hackathon Project #19 — Signal Processing & Digital Electronics
 
-> **Visualize how analog signals become digital data — and how oversampling recovers lost quality.**  
-> An interactive, browser-based simulator that makes the invisible world of Analog-to-Digital Conversion tangible.
+> **A full browser-based laboratory for studying Analog-to-Digital Conversion.**  
+> Record real signals, run controlled experiments, log data, write observations, and export a complete lab report — no installation required.
 
 <br>
 
 ---
 
-## 🌐 Live Demo
+## 🌐 Live Website
 
 🔗 **[https://vertiam.github.io/adc-simulator/](https://vertiam.github.io/adc-simulator/)**
+
+| Page | URL | Description |
+|---|---|---|
+| 🏠 Landing Page | `/` or `/index.html` | Project overview, theory, and experiment guide |
+| 🔬 Lab Environment | `/lab.html` | Full 5-step interactive experiment |
 
 ---
 
@@ -21,6 +26,8 @@
 - [What This Project Does](#-what-this-project-does)
 - [The Problem We're Solving](#-the-problem-were-solving)
 - [Technologies Used](#-technologies-used)
+- [Website Structure](#-website-structure)
+- [Lab Workflow — All 5 Steps](#-lab-workflow--all-5-steps)
 - [Core Concepts Explained](#-core-concepts-explained)
   - [Analog vs Digital](#1-analog-vs-digital)
   - [ADC — How It Works](#2-adc--how-it-works)
@@ -33,65 +40,164 @@
 - [Features](#-features)
 - [How to Use](#-how-to-use)
 - [Real-World Applications](#-real-world-applications)
-- [Project Structure](#-project-structure)
+- [Project File Structure](#-project-file-structure)
+- [Key Formulas Reference](#-key-formulas-reference)
 - [Team](#-team)
 
 <br>
 
 ---
 
-## What This Project Does
+## 🎯 What This Project Does
 
-This simulator lets you **see** what happens inside an ADC chip in real time. You control:
+This is a **complete digital laboratory** for signal processing experiments. It goes far beyond a simple simulator — it is a structured, end-to-end lab experience designed for students to:
 
-- How many **bits** the ADC uses to encode each sample
-- How much **oversampling** is applied
-- What **type of signal** is being converted (sine, square, sawtooth, or your own CSV data)
-- How much **background noise** is present before conversion
+- **Record real audio** from a microphone and feed it through a virtual ADC
+- **Control ADC parameters** — bit depth (2–16 bit) and oversampling (1× to 64×)
+- **Observe the effects live** — staircase waveform, quantization noise, SNR curve
+- **Log experimental readings** into a data table with notes
+- **Write up a full lab notebook** — aim, theory, observations, conclusion
+- **Export a complete lab report** as a printable/CSV document
 
-The simulator then shows you three live charts:
-1. The **original vs quantized waveform** — see the staircase effect
-2. The **quantization error** — see the actual noise introduced
-3. The **SNR vs bit depth curve** — see where you sit on the theoretical limit
+Everything runs in a web browser. No Python, no MATLAB, no installation.
 
 <br>
 
 ---
 
-## The Problem We're Solving
+## 🔍 The Problem We're Solving
 
 **Problem Statement #19:**
 > *Analog-to-digital conversion introduces quantization noise. Simulate ADC digitization effects and study how oversampling improves signal quality.*
 
-Every sensor, microphone, camera, and smart device converts real-world signals into digital numbers. This conversion is **never perfect** — it always introduces error. Understanding this error, and knowing how to reduce it (through techniques like oversampling), is fundamental to electronics and signal processing.
+Every sensor, microphone, camera, and smart device converts real-world signals into digital numbers. This conversion is **never perfect** — it always introduces error. Understanding this error, and knowing how to reduce it through oversampling, is fundamental to electronics and signal processing.
 
-This project makes that abstract concept **visual, interactive, and intuitive**.
+This project makes that abstract concept **visual, interactive, and academically rigorous** — structured exactly like a real lab session.
 
 <br>
 
 ---
 
-## Technologies Used
+## 🛠 Technologies Used
 
 | Technology | Purpose | Why We Chose It |
 |---|---|---|
-| **HTML5** | Structure of the web app | Universal browser support, no install needed |
-| **CSS3** | Styling, layout, animations | Full control over the dark monochromatic UI design |
-| **JavaScript (ES6+)** | All simulation logic and interactivity | Runs entirely in the browser — no server needed |
-| **Chart.js** | Drawing the three live charts | Lightweight, fast, easy to update in real time |
-| **JetBrains Mono** | Monospace font for data values | Conveys technical/engineering aesthetic |
-| **DM Sans** | Body font for labels and prose | Clean readability at small sizes |
-| **GitHub Pages** | Free static site hosting | Zero cost, auto-deploys on every commit |
+| **HTML5** | Page structure for all three files | Universal browser support, zero install |
+| **CSS3** | Shared design system (`style.css`) | Dark monochromatic UI, consistent across pages |
+| **JavaScript (ES6+)** | All simulation logic, recording, data management | Runs entirely in browser — no server needed |
+| **Web Audio API** | Microphone recording and PCM decoding | Native browser API, no libraries needed |
+| **MediaRecorder API** | Capturing audio stream to blob | Standard, works on all modern browsers |
+| **Chart.js v4** | Three live interactive charts | Lightweight, real-time updates with `update('none')` |
+| **localStorage** | Auto-saving student data between sessions | Built into every browser, no database needed |
+| **JetBrains Mono** | Monospace font for data values | Technical/engineering aesthetic |
+| **DM Sans** | Body font for readable prose | Clean at small sizes |
+| **GitHub Pages** | Free static site hosting | HTTPS required for microphone, auto-deploys on push |
 
-> **Note:** This project intentionally uses no Python, no backend server, and no build tools. Everything runs as a single `.html` file in the browser. This makes it instantly shareable — just open the file or visit the URL.
->
-> *The mention of Python/Matplotlib in the project brief refers to the algorithmic concepts (which we implement in JavaScript) — the same mathematics applies regardless of language.*
+ 
+> The project brief references these as concept tools. We implement the identical mathematics — midtread quantization, oversampling decimation, SNR calculation — in JavaScript so it runs live in the browser without any local setup. The algorithms are the same; the runtime is different.
 
 <br>
 
 ---
 
-## Core Concepts Explained
+##  Website Structure
+
+The project is split into **3 files** that work together:
+
+```
+adc-simulator/
+│
+├── index.html     ← Landing page (theory, objectives, experiment overview)
+├── lab.html       ← Full 5-step lab environment
+├── style.css      ← Shared design system used by both HTML files
+│
+└── README.md      ← This file
+```
+
+
+> ⚠️ **Microphone recording requires HTTPS.** GitHub Pages provides this automatically. It will NOT work if you open `lab.html` as a local `file://` URL — use the hosted link.
+
+<br>
+
+---
+
+## 🔬 Lab Workflow — All 5 Steps
+
+The lab is structured as a guided 5-step experiment, accessible via the step bar at the top of `lab.html`.
+
+### Step 1 — Student Setup
+Students enter their details before beginning:
+- Full name, registration number, department
+- Date, experiment title, section/batch
+
+This information is stored in `localStorage` and automatically appears in the final report. The form auto-saves every 10 seconds, so students can close the browser and return later.
+
+---
+
+### Step 2 — Signal Source
+Three ways to provide the input signal:
+
+**🎤 Microphone Recording**
+- Uses `navigator.mediaDevices.getUserMedia()` to capture audio
+- `MediaRecorder` records to a WebM blob
+- `AudioContext.decodeAudioData()` decodes the blob to raw PCM float samples
+- Samples are normalized to `[-1, +1]` and stored in memory
+- A live waveform visualiser (`AnalyserNode + Canvas`) shows the recording in real time
+- Configurable recording duration (2–10 seconds)
+
+**⚡ Signal Generator**
+- Four waveform types: Sine, Square, Sawtooth, Chirp (frequency-swept sine)
+- Configurable frequency (1–8 Hz) and amplitude (10–100%)
+- A canvas preview updates live as you adjust parameters
+
+**📂 CSV Upload**
+- Drag and drop or file picker
+- Accepts single-column (values) or two-column (time, value) format
+- Tab, comma, or semicolon delimited
+- Auto-normalized to `[-1, +1]` regardless of original scale
+- Linearly resampled to 250 points for the simulator
+
+---
+
+### Step 3 — Run Experiments
+The core simulation environment. Three live charts update in real time:
+
+1. **Waveform chart** — Original (blue, smooth) vs Quantized (orange, stepped). An orange fill shades the gap between them, making the error visible even at high bit depths. Dashed horizontal level-lines appear at ≤7-bit depth, showing exactly which level each sample snaps to.
+
+2. **Quantization Error chart** — The raw difference between original and quantized at every sample. This is the noise signal itself. RMS error is displayed live.
+
+3. **SNR vs Bit Depth chart** — The theoretical SNR curve for the current oversampling rate, with an orange dot marking the student's exact current operating point.
+
+**Recording readings:** A "Record This Reading" button logs the current settings (bits, oversampling, noise floor, levels, SNR, ENOB, RMS error) into a persistent data table. Students can add inline notes to each row, delete individual rows, or export the full table as CSV.
+
+---
+
+### Step 4 — Lab Notebook
+A structured notebook with six pre-labelled sections:
+- **Aim** — Pre-filled with the standard experiment aim (editable)
+- **Apparatus** — Equipment list (editable)
+- **Theory** — Pre-filled with key formulas and explanations (editable)
+- **Observations** — Student fills this in based on what they saw
+- **Analysis & Calculations** — Compare measured vs theoretical SNR
+- **Inference & Conclusion** — Final conclusions
+
+All fields auto-save to `localStorage`.
+
+---
+
+### Step 5 — Report
+A fully assembled lab report generated from all previous steps:
+- Student information header (from Step 1)
+- Complete experimental data table (from Step 3)
+- All six notebook sections (from Step 4)
+
+Students can print directly (`window.print()` with print-specific CSS that hides navigation) or export a full CSV containing all metadata, data, and notebook text.
+
+<br>
+
+---
+
+##  Core Concepts Explained
 
 ### 1. Analog vs Digital
 
@@ -127,7 +233,7 @@ Sample rate examples:
 
 ### 3. Bit Depth & Quantization Levels
 
-Bit depth (also called resolution) determines how many discrete levels the ADC can produce. The formula is:
+Bit depth determines how many discrete levels the ADC can produce:
 
 ```
 Number of levels = 2ⁿ    (where n = number of bits)
@@ -141,23 +247,19 @@ Number of levels = 2ⁿ    (where n = number of bits)
 | 16-bit | 65,536 | CD audio, professional audio |
 | 24-bit | 16,777,216 | Studio recording |
 
-More levels = smaller rounding error = cleaner signal.
-
 ---
 
 ### 4. Quantization Noise
 
-When the ADC rounds a sample to the nearest level, the difference between the **true value** and the **rounded value** is called the **quantization error**. This error manifests as noise in the output.
+When the ADC rounds a sample to the nearest level, the difference between the **true value** and the **rounded value** is the quantization error. This IS the noise.
 
 ```
-True value:       0.732 V
-Nearest level:    0.750 V  (at 4-bit resolution)
+True value:         0.732 V
+Nearest level:      0.750 V  (at 4-bit resolution)
 Quantization error: 0.018 V  ← this IS the noise
 ```
 
-The noise is spread across all samples and you hear it as **hiss**, **crackle**, or **distortion** in audio, or as **inaccuracy** in sensor readings.
-
-Mathematically, the quantization error `e` is bounded:
+Mathematically, the error `e` is bounded:
 ```
 -step/2 ≤ e ≤ +step/2     where step = 2 / 2ⁿ
 ```
@@ -166,12 +268,10 @@ Mathematically, the quantization error `e` is bounded:
 
 ### 5. Signal-to-Noise Ratio (SNR)
 
-SNR measures how much louder the signal is compared to the noise, in decibels (dB). Higher is better.
+SNR measures how much louder the signal is compared to the noise, in decibels. Higher is better.
 
 ```
-Theoretical SNR formula:
-  SNR ≈ 6.02 × n + 1.76   (dB)
-  where n = number of bits
+Theoretical SNR:  SNR ≈ 6.02 × n + 1.76   (dB)
 ```
 
 | Application | Typical SNR |
@@ -181,283 +281,335 @@ Theoretical SNR formula:
 | CD Audio | ~96 dB |
 | Studio Recording | ~120+ dB |
 
-Every additional bit adds approximately **6 dB of SNR** — doubling the number of levels halves the noise.
+Every additional bit adds approximately **6 dB of SNR**.
 
 ---
 
 ### 6. Oversampling
 
-Oversampling is a clever technique to get better quality from cheaper hardware. Instead of taking one sample at the required rate, the ADC takes **many samples faster than needed**, then **averages them together**.
+Instead of one sample per interval, take `M` samples and average them. Random quantization errors cancel out statistically while the true signal is preserved.
 
 ```
-Normal (1×):    [sample] → quantize → output
-                 Error stays
-
+Normal (1×):    [sample] → quantize → output  (error stays)
 4× Oversample:  [s1][s2][s3][s4] → quantize each → average → output
                  Random errors partially cancel out
 ```
 
-**Why does averaging reduce noise?**
-
-The quantization errors on each super-sample are statistically independent and randomly distributed. When you average `M` independent random values, the variance drops by factor `M` and the amplitude (standard deviation) drops by `√M`.
-
-Since `M = osRate`, and we need 4× to gain one bit (because `√4 = 2`, and halving noise amplitude ≈ +6 dB ≈ +1 bit):
-
 ```
-Golden Rule: Every 4× oversampling = +1 effective bit of resolution
-```
-
-With oversampling, the full SNR formula becomes:
-```
-SNR = 6.02 × n + 1.76 + 10 × log₁₀(osRate)   (dB)
+Golden Rule: Every 4× oversampling = +1 effective bit = +6 dB SNR
+Full formula: SNR = 6.02n + 1.76 + 10·log₁₀(osRate)  dB
 ```
 
 ---
 
 ### 7. Effective Number of Bits (ENOB)
 
-ENOB combines your hardware bit depth with the oversampling gain into one number:
+ENOB is your actual resolution after combining hardware bit depth with oversampling gain:
 
 ```
-ENOB = n + (log₂(osRate) / 2)
+ENOB = n + log₂(osRate) / 2
 ```
 
-Example: A 12-bit ADC with 16× oversampling achieves:
-```
-ENOB = 12 + (log₂(16) / 2) = 12 + 2 = 14 effective bits
-```
+Example: 12-bit ADC + 16× oversampling → ENOB = 12 + 2 = **14 effective bits**
 
-This is the principle behind **sigma-delta ADCs** used in smartphones and streaming audio — cheap 1-bit hardware with extreme oversampling achieves 24-bit quality.
+This is the principle behind sigma-delta ADCs used in every smartphone.
 
 <br>
 
 ---
 
-## The Algorithm — How the Code Works
+##  The Algorithm — How the Code Works
 
-The entire simulation runs in JavaScript. Here is the step-by-step breakdown:
+All simulation logic lives in `lab.html` (and the standalone `adc_simulator.html`). Here is the complete breakdown:
 
-### Step 1 — Signal Generation (`genSignal`)
+### Step 1 — Signal Acquisition
 
-```
-Inputs:  N (number of points), waveform type, frequency
-Output:  Array of N values in the range [-1, +1]
-```
-
-Four waveform modes are supported:
+Three paths depending on the source selected in Step 2:
 
 ```javascript
-Sine:     signal[i] = sin(2π × freq × i/N)
-Square:   signal[i] = sign(sin(2π × freq × i/N)) × 0.9
-Sawtooth: signal[i] = 2 × frac(freq × i/N) - 1
-CSV:      signal[i] = lerp(csvData, i/N)   ← linear interpolation
+// Microphone: MediaRecorder → WebM blob → decodeAudioData → Float32Array PCM
+const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+const raw = audioBuffer.getChannelData(0);  // mono channel
+
+// Generator: mathematical formula evaluated at N points
+sine:     v = sin(2π × freq × t)
+square:   v = sign(sin(2π × freq × t)) × 0.9
+sawtooth: v = 2 × frac(freq × t) - 1
+chirp:    v = sin(2π × (freq + freq×t) × t)  // frequency sweep
+
+// CSV: linear interpolation (lerp) between adjacent user samples
+signal[i] = csvData[lo] + (csvData[hi] - csvData[lo]) × (idx - lo)
 ```
 
-**Why these waveforms?**
-- Sine = single frequency, easy to analyse
-- Square = hard transitions, worst case for ADCs
-- Sawtooth = rich harmonics, exercises full dynamic range
-- CSV = real sensor data (ECG, audio, temperature readings)
+All three sources are normalized to `[-1, +1]` and resampled to exactly N=250 display points using linear interpolation.
 
 ---
 
 ### Step 2 — Noise Floor Injection
 
 ```javascript
-noisy[i] = original[i] + (random() - 0.5) × 2 × noiseAmplitude
+noisy[i] = original[i] + (Math.random() - 0.5) × 2 × noiseAmplitude
 ```
 
-Uniform random noise is added before quantization to simulate real-world interference (thermal noise, EMI, power supply ripple). This gets quantized along with the signal.
+Uniform random noise is added before quantization to simulate real-world interference (thermal noise, EMI, power supply ripple). `noiseAmplitude` scales from 0 to 0.3.
 
 ---
 
 ### Step 3 — Midtread Uniform Quantization
 
 ```
-step = 2 / 2ⁿ              ← size of one level in [-1, +1]
+step = 2 / 2ⁿ              ← voltage width of one level
 Q[i] = round(x[i] / step) × step
 ```
 
-This is **midtread uniform quantization** — the standard algorithm inside every real ADC chip. Each sample is snapped to the nearest multiple of `step`. The rounding error is uniformly distributed in `[-step/2, +step/2]`, which matches the theoretical SNR formula exactly.
+This is **midtread uniform quantization** — the algorithm inside every real ADC chip. Each sample is snapped to the nearest multiple of `step`. The rounding error is uniformly distributed in `[-step/2, +step/2]`, which produces the theoretical SNR = `6.02n + 1.76 dB` exactly.
+
+The `Math.max(-1, Math.min(1, v))` clamp prevents clipping artifacts when noise pushes a sample outside the ADC's input range.
 
 ---
 
-### Step 4 — Oversampling + Decimation (when osRate > 1)
-
-```
-1. Generate N × osRate super-samples of the same signal
-2. Add independent noise to each super-sample
-3. Quantize every super-sample with the same midtread rule
-4. Average every group of osRate consecutive quantized values
-   back down to N output points
-```
+### Step 4 — Oversampling + Decimation
 
 ```javascript
+// 1. Generate N × osRate super-samples
+// 2. Add independent noise to each
+// 3. Quantize each with the same midtread rule
+// 4. Average every group of osRate → N output points
+
 for (let i = 0; i < N; i++) {
   let sum = 0;
   for (let j = 0; j < osRate; j++) {
-    sum += quantized_super_samples[i × osRate + j];
+    sum += quantized_super_samples[i * osRate + j];
   }
-  output[i] = sum / osRate;   // ← the averaging step
+  output[i] = sum / osRate;   // ← averaging step
 }
 ```
 
-The noise cancellation comes from **statistical independence** of rounding errors. Each super-sample is quantized at a slightly different point in time, so its rounding direction is independent. Averaging independent random variables reduces their combined variance.
+The noise cancellation comes from **statistical independence** of rounding errors. Each super-sample rounds independently, so averaging M of them reduces noise variance by factor M → noise amplitude by √M. Since 4× → √4 = 2 → amplitude halved → +6 dB → +1 bit.
 
 ---
 
-### Step 5 — Error & Metrics Calculation
+### Step 5 — Metrics Calculation
 
 ```javascript
-error[i]  = quantized[i] - original[i]     // quantization noise at each point
-RMS       = sqrt( mean( error[i]² ) )       // root mean square error
-SNR       = 6.02×bits + 1.76 + 10×log₁₀(osRate)   // theoretical dB
-ENOB      = bits + osRateExp / 2            // effective resolution
+errors = original.map((v, i) => quantized[i] - v)
+RMS    = sqrt(mean(errors²))
+SNR    = 6.02 × bits + 1.76 + 10 × log₁₀(osRate)   // dB
+ENOB   = bits + osRateExp / 2
 ```
 
-### Step 6 — Live Chart Updates
+---
 
-All three Chart.js charts update on every slider move with `chart.update('none')` (no animation) to keep the response instant and smooth.
+### Step 6 — Chart Rendering
+
+Three Chart.js instances, all updated via `chart.update('none')` (no animation) for instant slider response:
+
+- **Waveform chart** — 3 datasets: original (blue line), quantized (orange stepped line), fill anchor (invisible copy of quantized that fills between itself and dataset[0] with orange shading). A custom `levelLinesPlugin` draws dashed horizontal lines at each quantization boundary when bits ≤ 7.
+- **Error chart** — Single line + fill showing the raw difference signal
+- **SNR chart** — Green theoretical curve + orange scatter dot at current operating point
+
+---
+
+### Step 7 — Data Persistence
+
+```javascript
+// Auto-save all form fields + readings array to localStorage
+localStorage.setItem('adc-lab', JSON.stringify(data));
+
+// Reload on page open
+const d = JSON.parse(localStorage.getItem('adc-lab'));
+```
+
+`readings` is a JavaScript array of objects. Each call to "Record This Reading" pushes a new object and re-renders the HTML table. The table supports inline note editing, row deletion, and CSV export.
 
 <br>
 
 ---
 
-## Features
+##  Features
 
-- **Adjustable Bit Depth** — drag from 2-bit (16 levels) to 16-bit (65,536 levels)
-- **Oversampling Control** — 1× up to 64× in powers of 2
-- **4 Signal Modes** — Sine, Square, Sawtooth, and your own CSV data
-- **CSV Upload** — drag and drop any `.csv` file with real sensor data
-- **Noise Floor Slider** — simulate real-world interference before the ADC
-- **3 Live Charts** — waveform, error signal, and SNR curve
-- **Hover Tooltips** — every technical term has a plain-English explanation
-- **Signal Quality Meter** — real-time quality indicator (Poor → Studio)
-- **Live Metrics** — quantization levels, SNR (dB), and ENOB update instantly
-- **Single File** — the entire app is one `.html` file, no install needed
+### Landing Page (`index.html`)
+- Theory cards for all 4 core concepts with formulas
+- Visual 5-step experiment workflow diagram
+- Objectives and equipment list
+- Links to the lab environment
+
+### Lab Environment (`lab.html`)
+- ** Microphone Recording** — record real audio, decoded to PCM samples with live visualiser
+- ** Signal Generator** — sine, square, sawtooth, chirp with frequency + amplitude control
+- ** CSV Upload** — drag-and-drop, auto-normalised, works with sensor data
+- ** Bit Depth Slider** — 2-bit to 16-bit with live bit meter
+- ** Oversampling Slider** — 1× to 64× in powers of 2
+- ** Noise Floor** — 0–30% pre-ADC noise injection
+- ** 3 Live Charts** — waveform + fill, error signal, SNR curve
+- ** Level Lines** — dashed grid at each quantization boundary (≤7 bit)
+- ** Hover Tooltips** — JS-positioned bubbles for every technical term
+- ** Quality Meter** — Poor → FM → CD → Studio, colour-coded live
+- ** Record Readings** — log every setting to a data table with inline notes
+- ** Auto-Save** — all data persists in localStorage between sessions
+- ** Lab Notebook** — 6-section notebook (aim, apparatus, theory, observations, analysis, conclusion)
+- ** Report Builder** — auto-assembles final report from all steps
+- ** Print** — print-optimised CSS hides navigation for clean output
+- ** Export CSV** — readings table and full report both exportable
 
 <br>
 
 ---
 
-## How to Use
+## 🚀 How to Use
+
+### Using the Hosted Site
+Visit **[https://vertiam.github.io/adc-simulator/](https://vertiam.github.io/adc-simulator/)** — no setup needed.
 
 ### Running Locally
-
-No setup required. Just download the file and open it:
+The landing page and simulator work by simply opening the files. However, **microphone recording requires HTTPS** — it will not work from `file://`. For local mic testing, use a local HTTPS server:
 
 ```bash
-# Option 1: double-click index.html in your file manager
+# Python (simplest)
+python -m http.server 8000
+# then open http://localhost:8000
 
-# Option 2: from terminal
-open index.html         # macOS
-start index.html        # Windows
-xdg-open index.html    # Linux
+# Node.js (if installed)
+npx serve .
 ```
 
-### Using the Simulator
+### Lab Experiment — Quick Start
 
 ```
-1. Choose a waveform type (Sine / Square / Sawtooth / CSV)
-2. Drag the Bit Depth slider left to reduce quality, right to improve
-3. Watch the staircase appear in the waveform chart
-4. Drag Oversampling up and see the noise reduce
-5. Observe the orange dot move along the SNR curve
-6. Try uploading a CSV of real data (one number per line)
+1. Open /lab.html
+2. Step 1: Enter your name and reg number
+3. Step 2: Choose signal source
+         → Mic: click the red button, speak, stop
+         → Generator: pick waveform, adjust frequency
+         → CSV: drag your data file onto the drop zone
+4. Step 3: Move the Bit Depth slider to 4-bit
+         → Observe the staircase in the waveform
+         → Click "Record This Reading"
+         → Move to 8-bit → Record again
+         → Move to 12-bit → Record again
+         → Now drag Oversampling to 4×, 16×, 64×
+         → Record each setting to build your data table
+5. Step 4: Write your observations and conclusion
+6. Step 5: Print or export your report
 ```
 
-### CSV Format
-
-The CSV upload accepts:
+### CSV Data Format
 
 ```
-# Single column (value only)
+# Single column (values only)
 0.123
 -0.456
 0.789
 
-# Two columns (time, value)
-0.0, 0.123
+# Two columns (time, value) — comma, tab, or semicolon delimited
+0.000, 0.123
 0.001, -0.456
 0.002, 0.789
 ```
 
-Data is automatically normalized to the `[-1, +1] ` range regardless of your original scale.
+Values are automatically normalized to `[-1, +1]`. Any real sensor data works — ECG readings, temperature logs, accelerometer outputs, etc.
 
 <br>
 
 ---
 
-## Real-World Applications
+## 🌍 Real-World Applications
 
 | Domain | How ADC Quality Matters |
 |---|---|
-| **Music & Audio** | CD uses 16-bit 44.1kHz. Studio uses 24-bit. Noise = audible hiss |
-| **Medical Devices** | ECG, pulse oximeters, MRI scanners — a noisy sample = wrong diagnosis |
-| **Smartphones** | Every mic, touch screen, and camera sensor has an ADC inside |
-| **Communication** | AM/FM radio, 5G — quantization noise limits transmission quality |
-| **IoT Sensors** | Temperature, pressure, humidity sensors all use ADCs |
-| **Scientific Instruments** | Oscilloscopes, spectrum analysers — precision depends on ADC resolution |
-| **Gaming** | Controller analog sticks, audio — 8-bit feels 'lo-fi', 16-bit is clean |
+|  **Music & Audio** | CD uses 16-bit 44.1kHz. Studio uses 24-bit. Noise = audible hiss |
+|  **Medical Devices** | ECG, pulse oximeters, MRI scanners — a noisy sample = wrong diagnosis |
+|  **Smartphones** | Every mic, touch screen, and camera sensor has an ADC inside |
+|  **Communication** | AM/FM radio, 5G — quantization noise limits transmission quality |
+|  **IoT Sensors** | Temperature, pressure, humidity sensors all use ADCs |
+|  **Scientific Instruments** | Oscilloscopes, spectrum analysers — precision depends on ADC resolution |
+|  **Gaming** | Controller analog sticks, audio — 8-bit feels 'lo-fi', 16-bit is clean |
 
 <br>
 
 ---
 
-## 📁 Project Structure
+##  Project File Structure
 
 ```
 adc-simulator/
 │
-├── index.html          ← The entire application (HTML + CSS + JS)
+├── index.html              ← Landing page
+│   ├── <nav>               Sticky navigation bar
+│   ├── .hero               Title, subtitle, stats row
+│   ├── #concepts           4 theory cards with formulas
+│   ├── .flow-steps         5-step experiment workflow diagram
+│   ├── objectives grid     What you'll do + what you need
+│   ├── .cta-section        "Start the Lab" call to action
+│   └── <footer>            Team info
 │
-└── README.md           ← This file
-```
-
-The project is intentionally a **single self-contained file**. Every function, style, and chart is inside `index.html`:
-
-```
-index.html
-├── <style>             CSS variables, layout, controls, tooltip system
-├── #g-tip              Global JS-positioned tooltip (bypasses overflow clipping)
-├── <header>            Title + hover-explainer terms
-├── .grid-main          Two-column layout (controls | charts)
-│   ├── Left column
-│   │   ├── Stats row   (Levels, SNR, ENOB cards)
-│   │   ├── Quality bar (Poor → Studio gradient)
-│   │   ├── Signal source panel  (Sine/Square/Sawtooth/CSV tabs)
-│   │   └── ADC settings panel   (Bit depth, Oversampling, Noise floor)
-│   └── Right column
-│       ├── Waveform chart   (Original vs Quantized)
-│       ├── Error chart      (Quantization noise signal)
-│       └── SNR chart        (Theory curve + current dot)
-└── <script>
-    ├── Tooltip engine   (getBoundingClientRect + fixed positioning)
-    ├── genSignal()      Signal generation (sine/square/sawtooth/CSV)
-    ├── buildData()      Quantization + oversampling algorithm
-    ├── update()         Reads sliders → calls buildData → updates charts
-    └── initCharts()     Chart.js setup for all three graphs
+├── lab.html                ← Full lab environment
+│   ├── <nav>               Navigation (links back to index)
+│   ├── .step-bar           Clickable 5-step progress indicator
+│   ├── #step1              Student info form (auto-saves to localStorage)
+│   ├── #step2              Signal source
+│   │   ├── Microphone      getUserMedia → MediaRecorder → decodeAudioData
+│   │   ├── Generator       Sine / Square / Sawtooth / Chirp + canvas preview
+│   │   └── CSV Upload      Drag-drop, parse, normalize, lerp resample
+│   ├── #step3              Experiment environment
+│   │   ├── Left column     Stats, quality bar, ADC sliders, Record button
+│   │   └── Right column    Waveform chart, Error chart, SNR chart
+│   ├── #readings-table     Logged data with inline notes + CSV export
+│   ├── #step4              Lab notebook (6 textarea sections)
+│   ├── #step5              Auto-assembled report + print + export
+│   ├── .lab-footer         Prev/Next navigation + auto-save indicator
+│   └── <script>
+│       ├── Tooltip engine  getBoundingClientRect → position:fixed
+│       ├── Step nav        goStep(), nextStep(), prevStep()
+│       ├── Auto-save       localStorage read/write, setInterval(10s)
+│       ├── Signal source   setSignalMode(), startRecording(), updateGen()
+│       ├── buildSimData()  Quantization + oversampling algorithm
+│       ├── simUpdate()     Reads sliders → buildSimData → updates charts
+│       ├── initCharts()    Chart.js setup (wave, error, SNR)
+│       ├── levelPlugin     Custom Chart.js plugin for level-line grid
+│       ├── recordReading() Push to readings[], re-render table, save
+│       ├── exportReadingsCSV() / exportFullReport()
+│       └── buildReport()   Assembles Step 5 from all previous data
+│
+├── style.css               ← Shared design system
+│   ├── CSS variables        Colors, fonts, radii, shadows
+│   ├── body / nav           Layout, sticky nav, logo
+│   ├── Typography           h1–h4, body text, code
+│   ├── Buttons              Primary, outline, ghost, danger + sizes
+│   ├── Cards                card, card-header, card-body
+│   ├── Status dots          Color-coded animated indicators
+│   ├── Form elements        Input, select, textarea, range slider
+│   ├── Tabs                 .tabs / .tab / .tab-content
+│   ├── Data table           .data-table with hover states
+│   ├── Badges               Color variants for SNR quality
+│   ├── Step bar             .step-item, .step-num, connectors
+│   ├── Upload zone          Drag-and-drop with hover states
+│   ├── Record button        Idle / recording / done states + pulse
+│   └── Print styles         @media print hides nav + controls
+│
+└── README.md               ← This file
 ```
 
 <br>
 
 ---
 
-## Key Formulas Reference
+##  Key Formulas Reference
 
 ```
 Quantization Levels    =  2ⁿ
 Quantization Step Size =  Full Scale Range / 2ⁿ
 Quantization Error     ∈  [-step/2, +step/2]
+RMS Quantization Noise =  step / √12
 
 Theoretical SNR        =  6.02n + 1.76                      (dB, no oversampling)
 SNR with Oversampling  =  6.02n + 1.76 + 10·log₁₀(osRate)  (dB)
-Oversampling Gain      =  10·log₁₀(osRate)                  (dB)
+Oversampling SNR Gain  =  10·log₁₀(osRate)                  (dB)
 
-ENOB                   =  n + log₂(osRate)/2
+ENOB                   =  n + log₂(osRate) / 2
 Golden Rule            :  4× oversampling  ≡  +1 bit  ≡  +6 dB SNR
 
-RMS Noise              =  step / √12    (for uniform quantization)
+Nyquist Theorem        :  sample_rate ≥ 2 × f_signal  (minimum to reconstruct)
 ```
 
 <br>
@@ -466,24 +618,23 @@ RMS Noise              =  step / √12    (for uniform quantization)
 
 ## 👥 Team
 
-**Team Name: Qt π's**
-**Hackathon Project Track #4 PS_19** — ADC Resolution, Noise & Oversampling Simulator
+**Team Name: Qt π's**  
+**Quantumn Hackathon Track 4 PS_#19** — ADC Resolution, Noise & Oversampling Simulator  
 **Department:** Mechanical Engineering
 
 | Role | Name | Registration No. |
 |---|---|---|
-| **Team Leader** | Swayam Viral Marfatia | RA2511002010080 |
-| **Member** | Narayan Murthy | RA2511002010124 |
-| **Member** | Shirly Oviya | RA2511054010030 |
-| **Member** | Mithasha P Sishaj | RA2511053050040 |
-
-Built to make signal processing concepts accessible through interactive visualisation.
+|  **Team Leader** | Swayam Viral Marfatia | RA2511002010080 |
+|  **Member** | Narayan Murthy | RA2511002010124 |
+|  **Member** | Shirly Oviya | RA2511054010030 |
+| **Member** | Mithasha P Sishaj | RA2511053050040 | 
+Built to make signal processing concepts accessible through an interactive, academically rigorous lab experience.
 
 ---
 
 <br>
 
-> *"The goal is to turn invisible noise into something you can see, drag a slider, and understand."*
-> — **Qt π's**
+> *"The goal is to turn invisible noise into something you can see, drag a slider, and understand."*  
+> — **Qt π's**, Quantumn Hackathon Track 4 PS_19
 
 ---
