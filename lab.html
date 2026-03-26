@@ -6,6 +6,8 @@
 <title>ADC Lab — Experiment</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <style>
   .lab-layout { display: flex; flex-direction: column; min-height: calc(100vh - 56px); }
   .lab-main   { flex: 1; padding: 24px; max-width: 1200px; margin: 0 auto; width: 100%; }
@@ -117,7 +119,7 @@
   .step-item.locked { opacity: 0.4; cursor: not-allowed; }
   .step-item.locked:hover { color: var(--muted2) !important; }
 
-  /* ── TOOLTIP (fixed JS-positioned) ── */
+  /* ── TOOLTIP  ── */
   #g-tip { display:none;position:fixed;z-index:99999;pointer-events:none;opacity:0;transition:opacity 0.15s ease,transform 0.15s ease;transform:translateY(6px);width:240px;background:#232323;border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:13px 15px;box-shadow:0 16px 48px rgba(0,0,0,0.7); }
   #g-tip.show { opacity:1;transform:translateY(0); }
   #g-tip .gt-icon  { font-size:20px;display:block;margin-bottom:6px; }
@@ -126,6 +128,57 @@
   #g-tip .gt-arr   { position:absolute;bottom:-8px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid rgba(255,255,255,0.18); }
   #g-tip .gt-arr::after { content:'';position:absolute;top:-9px;left:-7px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:7px solid #232323; }
   .tip { border-bottom:1.5px dashed rgba(255,255,255,0.28);color:var(--text);cursor:help;font-weight:500; }
+
+  /* ── CHART TOOLBAR ── */
+  .chart-tools { display:flex; align-items:center; gap:3px; flex-shrink:0; }
+  .ct-btn {
+    position:relative; width:26px; height:26px; border-radius:5px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--s3); border:1px solid var(--border);
+    cursor:pointer; font-size:12px; color:var(--muted2);
+    transition:all 0.15s; flex-shrink:0; line-height:1;
+  }
+  .ct-btn:hover { background:var(--s4); color:var(--text); border-color:var(--border2); }
+  .ct-btn.zoom-active  { background:rgba(91,156,246,0.15);  border-color:rgba(91,156,246,0.4);  color:#5b9cf6; }
+  .ct-btn.mark-active  { background:rgba(251,191,36,0.15);  border-color:rgba(251,191,36,0.4);  color:#fbbf24; }
+  .ct-sep { width:1px; height:14px; background:var(--border2); margin:0 2px; flex-shrink:0; }
+  /* tiny tooltip on hover */
+  .ct-btn::after {
+    content:attr(data-tip); position:absolute; bottom:calc(100% + 6px); left:50%;
+    transform:translateX(-50%); background:#1a1a1a; color:var(--muted3);
+    font-size:10px; font-family:var(--mono); padding:3px 7px; border-radius:4px;
+    white-space:nowrap; pointer-events:none; opacity:0; transition:opacity 0.15s;
+    border:1px solid var(--border2); z-index:500;
+  }
+  .ct-btn:hover::after { opacity:1; }
+
+  /* ── ZOOM INFO BAR ── */
+  .zoom-bar {
+    display:none; padding:4px 14px;
+    border-top:1px solid var(--border); background:var(--s2);
+    font-family:var(--mono); font-size:10px; color:var(--muted);
+    justify-content:space-between; align-items:center; gap:8px;
+  }
+  .zoom-bar.on { display:flex; }
+  .zoom-reset-link {
+    color:var(--blue); cursor:pointer; text-decoration:underline;
+    font-size:10px; font-family:var(--mono); background:none; border:none; padding:0;
+  }
+
+  /* ── MARKER LIST ── */
+  .marker-panel {
+    display:none; flex-direction:column; gap:3px;
+    padding:7px 14px 9px; border-top:1px solid var(--border);
+    background:var(--s2); max-height:92px; overflow-y:auto;
+  }
+  .marker-panel.on { display:flex; }
+  .mk-row { display:flex; align-items:center; gap:7px; font-size:11px; font-family:var(--mono); }
+  .mk-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .mk-name { flex:1; min-width:0; background:transparent; border:none; color:var(--muted3); font-size:11px; font-family:var(--mono); outline:none; }
+  .mk-name:focus { color:var(--text); }
+  .mk-coord { color:var(--muted); font-size:10px; flex-shrink:0; }
+  .mk-del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:12px; padding:0 2px; flex-shrink:0; }
+  .mk-del:hover { color:var(--red); }
 </style>
 </head>
 <body>
@@ -238,7 +291,7 @@
       <div class="card-body">
         <div class="alert alert-warn" style="margin-bottom:16px;">
           <span>⚠️</span>
-          <span>Requires microphone permission. Works on HTTPS (the hosted site) — not on local file://</span>
+          <span>Requires microphone permission.//</span>
         </div>
         <canvas id="mic-canvas"></canvas>
         <div style="display:flex;align-items:center;gap:16px;margin-top:16px;justify-content:center;flex-wrap:wrap;">
@@ -417,12 +470,28 @@
               &nbsp;Waveform
             </h3>
           </div>
-          <div class="legend">
-            <span class="legend-item"><span class="legend-line" style="background:#5b9cf6;"></span>Original</span>
-            <span class="legend-item"><span class="legend-line" style="background:#ff6500;"></span>Quantized</span>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div class="legend">
+              <span class="legend-item"><span class="legend-line" style="background:#5b9cf6;"></span>Original</span>
+              <span class="legend-item"><span class="legend-line" style="background:#ff6500;"></span>Quantized</span>
+            </div>
+            <div class="ct-sep"></div>
+            <div class="chart-tools">
+              <button class="ct-btn" data-tip="Zoom in (scroll wheel also works)"  onclick="doZoom('wave',1.3)">+</button>
+              <button class="ct-btn" data-tip="Zoom out" onclick="doZoom('wave',0.77)">−</button>
+              <button class="ct-btn" data-tip="Reset zoom" onclick="doReset('wave')">⊙</button>
+              <div class="ct-sep"></div>
+              <button class="ct-btn" id="mk-btn-wave" data-tip="Place marker — then click chart" onclick="toggleMarker('wave')">📍</button>
+              <button class="ct-btn" data-tip="Download as PNG" onclick="dlChart('waveChart','waveform')">↓</button>
+            </div>
           </div>
         </div>
         <div class="chart-canvas-wrap"><div style="position:relative;height:180px;"><canvas id="waveChart"></canvas></div></div>
+        <div class="zoom-bar" id="zbar-wave">
+          <span id="zinfo-wave">Zoomed view</span>
+          <button class="zoom-reset-link" onclick="doReset('wave')">reset zoom</button>
+        </div>
+        <div class="marker-panel" id="mpanel-wave"></div>
       </div>
 
       <div class="card">
@@ -430,9 +499,25 @@
           <div class="chart-title"><div class="dot dot-coral"></div>
             <h3><span class="tip" data-icon="📉" data-title="Quantization Error" data-body="Difference between original and quantized at each sample. This IS the noise — ideally flat and low amplitude.">Quantization Error</span>&nbsp;— noise signal</h3>
           </div>
-          <span class="rms-badge" id="rms-badge">RMS: 0.0000</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="rms-badge" id="rms-badge">RMS: 0.0000</span>
+            <div class="ct-sep"></div>
+            <div class="chart-tools">
+              <button class="ct-btn" data-tip="Zoom in"   onclick="doZoom('error',1.3)">+</button>
+              <button class="ct-btn" data-tip="Zoom out"  onclick="doZoom('error',0.77)">−</button>
+              <button class="ct-btn" data-tip="Reset zoom" onclick="doReset('error')">⊙</button>
+              <div class="ct-sep"></div>
+              <button class="ct-btn" id="mk-btn-error" data-tip="Place marker" onclick="toggleMarker('error')">📍</button>
+              <button class="ct-btn" data-tip="Download PNG" onclick="dlChart('errorChart','error')">↓</button>
+            </div>
+          </div>
         </div>
         <div class="chart-canvas-wrap"><div style="position:relative;height:110px;"><canvas id="errorChart"></canvas></div></div>
+        <div class="zoom-bar" id="zbar-error">
+          <span id="zinfo-error">Zoomed view</span>
+          <button class="zoom-reset-link" onclick="doReset('error')">reset zoom</button>
+        </div>
+        <div class="marker-panel" id="mpanel-error"></div>
       </div>
 
       <div class="card">
@@ -440,12 +525,28 @@
           <div class="chart-title"><div class="dot dot-green"></div>
             <h3><span class="tip" data-icon="📊" data-title="SNR vs Bit Depth" data-body="Green curve = theoretical SNR. Oversampling shifts it upward. Orange dot = your current settings.">SNR</span>&nbsp;vs Bit Depth</h3>
           </div>
-          <div class="legend">
-            <span class="legend-item"><span class="legend-line" style="background:#4ade80;"></span>Theory</span>
-            <span class="legend-item"><span class="legend-dot" style="background:#f97316;"></span>You</span>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div class="legend">
+              <span class="legend-item"><span class="legend-line" style="background:#4ade80;"></span>Theory</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#f97316;"></span>You</span>
+            </div>
+            <div class="ct-sep"></div>
+            <div class="chart-tools">
+              <button class="ct-btn" data-tip="Zoom in"   onclick="doZoom('snr',1.3)">+</button>
+              <button class="ct-btn" data-tip="Zoom out"  onclick="doZoom('snr',0.77)">−</button>
+              <button class="ct-btn" data-tip="Reset zoom" onclick="doReset('snr')">⊙</button>
+              <div class="ct-sep"></div>
+              <button class="ct-btn" id="mk-btn-snr" data-tip="Place marker" onclick="toggleMarker('snr')">📍</button>
+              <button class="ct-btn" data-tip="Download PNG" onclick="dlChart('snrChart','snr_curve')">↓</button>
+            </div>
           </div>
         </div>
         <div class="chart-canvas-wrap"><div style="position:relative;height:130px;"><canvas id="snrChart"></canvas></div></div>
+        <div class="zoom-bar" id="zbar-snr">
+          <span id="zinfo-snr">Zoomed view</span>
+          <button class="zoom-reset-link" onclick="doReset('snr')">reset zoom</button>
+        </div>
+        <div class="marker-panel" id="mpanel-snr"></div>
       </div>
 
     </div>
@@ -477,7 +578,7 @@
           </tr>
         </thead>
         <tbody id="readings-body">
-          <tr><td colspan="10" class="empty-state">No readings yet — adjust the sliders and click "Record This Reading"</td></tr>
+          <tr><td colspan="10" class="empty-state">No readings yet : adjust the sliders and click "Record This Reading"</td></tr>
         </tbody>
       </table>
     </div>
@@ -1163,12 +1264,216 @@ function initBitMeter() {
 }
 function updateBitMeter(b){for(let i=0;i<16;i++)document.getElementById('bb-'+i).classList.toggle('on',i<b);}
 
+/* ════════════════════════════════════════════════════════
+   CHART HELPERS — lookup by short id
+════════════════════════════════════════════════════════ */
+function chartOf(id) {
+  return id==='wave' ? waveChart : id==='error' ? errorChart : snrChart;
+}
+function canvasOf(id) {
+  return id==='wave' ? 'waveChart' : id==='error' ? 'errorChart' : 'snrChart';
+}
+
+function doZoom(id, factor) {
+  const c = chartOf(id);
+  if (!c) return;
+  c.zoom(factor);
+  updateZoomBar(id);
+}
+
+function doReset(id) {
+  const c = chartOf(id);
+  if (!c) return;
+  c.resetZoom();
+  document.getElementById('zbar-'+id).classList.remove('on');
+}
+
+function updateZoomBar(id) {
+  const c = chartOf(id);
+  const xScale = c.scales.x;
+  if (!xScale) return;
+  const mn = Math.round(xScale.min), mx = Math.round(xScale.max);
+  const total = (c.data.labels || []).length || 16;
+  const pct = Math.round(((mx - mn) / total) * 100);
+  document.getElementById('zinfo-'+id).textContent =
+    `Showing samples ${mn}–${mx} · ${pct}% of range`;
+  document.getElementById('zbar-'+id).classList.add('on');
+}
+
+/* ════════════════════════════════════════════════════════
+   MARKERS
+════════════════════════════════════════════════════════ */
+const MK_COLORS = ['#fbbf24','#a78bfa','#34d399','#f472b6','#60a5fa','#fb923c'];
+const mkData    = { wave:[], error:[], snr:[] };
+const mkMode    = { wave:false, error:false, snr:false };
+
+const markerPlugin = {
+  id: 'mPlugin',
+  afterDraw(chart) {
+    const id = chart.canvas.id==='waveChart' ? 'wave'
+             : chart.canvas.id==='errorChart' ? 'error' : 'snr';
+    const mks = mkData[id];
+    if (!mks.length) return;
+    const { ctx, chartArea:{top,bottom,left,right}, scales:{x,y} } = chart;
+    ctx.save();
+    mks.forEach(m => {
+      const px = x.getPixelForValue(m.xi);
+      if (px < left || px > right) return;
+      // dashed vertical line
+      ctx.strokeStyle = m.col; ctx.lineWidth = 1.5;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(px,top); ctx.lineTo(px,bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      // diamond
+      ctx.fillStyle = m.col;
+      ctx.beginPath();
+      ctx.moveTo(px,     top+5);
+      ctx.lineTo(px+5,   top+10);
+      ctx.lineTo(px,     top+15);
+      ctx.lineTo(px-5,   top+10);
+      ctx.closePath(); ctx.fill();
+      // label (shifted right so it doesn't overlap the diamond)
+      ctx.fillStyle = m.col;
+      ctx.font = '10px JetBrains Mono, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(m.label, px+8, top+13);
+    });
+    ctx.restore();
+  }
+};
+
+function toggleMarker(id) {
+  mkMode[id] = !mkMode[id];
+  const btn = document.getElementById('mk-btn-'+id);
+  const cv  = document.getElementById(canvasOf(id));
+  if (mkMode[id]) {
+    btn.classList.add('mark-active');
+    btn.setAttribute('data-tip','Click on chart to place marker');
+    cv.style.cursor = 'crosshair';
+  } else {
+    btn.classList.remove('mark-active');
+    btn.setAttribute('data-tip','Place marker');
+    cv.style.cursor = '';
+  }
+}
+
+function onChartClick(e, chart, id) {
+  if (!mkMode[id]) return;
+  const rect = chart.canvas.getBoundingClientRect();
+  const xi   = Math.round(chart.scales.x.getValueForPixel(e.clientX - rect.left));
+  const ds0  = chart.data.datasets[0];
+  const yi   = ds0 && ds0.data[xi] !== undefined ? +ds0.data[xi].toFixed(4) : null;
+  const col  = MK_COLORS[mkData[id].length % MK_COLORS.length];
+  mkData[id].push({ xi, yi, col, label:'M'+(mkData[id].length+1) });
+  chart.update('none');
+  renderMarkers(id);
+  toggleMarker(id); // auto-exit placement mode
+}
+
+function renderMarkers(id) {
+  const panel = document.getElementById('mpanel-'+id);
+  const mks   = mkData[id];
+  if (!mks.length) { panel.classList.remove('on'); return; }
+  panel.classList.add('on');
+  panel.innerHTML = mks.map((m,i) => `
+    <div class="mk-row">
+      <span class="mk-dot" style="background:${m.col}"></span>
+      <input class="mk-name" value="${m.label}"
+        onchange="mkData['${id}'][${i}].label=this.value;chartOf('${id}').update('none');"
+        title="Rename marker">
+      <span class="mk-coord">x=${m.xi}${m.yi!==null?' y='+m.yi:''}</span>
+      <button class="mk-del" onclick="mkData['${id}'].splice(${i},1);chartOf('${id}').update('none');renderMarkers('${id}')">✕</button>
+    </div>
+  `).join('');
+}
+
+/* ════════════════════════════════════════════════════════
+   DOWNLOAD CHART AS PNG
+════════════════════════════════════════════════════════ */
+function dlChart(canvasId, name) {
+  const src = document.getElementById(canvasId);
+  const off = document.createElement('canvas');
+  off.width = src.width; off.height = src.height;
+  const ctx = off.getContext('2d');
+  ctx.fillStyle = '#171717';
+  ctx.fillRect(0,0,off.width,off.height);
+  ctx.drawImage(src,0,0);
+  off.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `adc_${name}_${new Date().toISOString().slice(0,10)}.png`;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  },'image/png');
+}
+
+/* ════════════════════════════════════════════════════════
+   CHART INIT
+════════════════════════════════════════════════════════ */
 function initCharts() {
-  const grid='rgba(255,255,255,0.05)',tick='#555';
-  const base={responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#232323',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,titleColor:'#e8e8e8',bodyColor:'#888',padding:10,cornerRadius:8}},scales:{x:{display:false},y:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10},maxTicksLimit:5},grid:{color:grid},border:{display:false}}}};
-  waveChart=new Chart(document.getElementById('waveChart'),{type:'line',data:{labels:[],datasets:[{label:'Original',data:[],borderColor:'#5b9cf6',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false},{label:'Quantized',data:[],borderColor:'#ff6500',borderWidth:3,pointRadius:0,tension:0,stepped:true,fill:false},{label:'_fill',data:[],borderColor:'transparent',borderWidth:0,pointRadius:0,tension:0,stepped:true,fill:{target:0,above:'rgba(249,115,22,0.3)',below:'rgba(249,115,22,0.3)'}}]},options:{...base,scales:{...base.scales,y:{...base.scales.y,min:-1.4,max:1.4}}},plugins:[levelPlugin]});
-  errorChart=new Chart(document.getElementById('errorChart'),{type:'line',data:{labels:[],datasets:[{label:'Error',data:[],borderColor:'#f87171',borderWidth:1,pointRadius:0,fill:true,backgroundColor:'rgba(248,113,113,0.08)'}]},options:{...base}});
-  snrChart=new Chart(document.getElementById('snrChart'),{type:'line',data:{labels:Array.from({length:17},(_,i)=>i),datasets:[{label:'SNR',data:[],borderColor:'#4ade80',borderWidth:2,pointRadius:0,tension:0.3,fill:true,backgroundColor:'rgba(74,222,128,0.04)'},{label:'Current',data:[],backgroundColor:'#f97316',borderColor:'#f97316',pointRadius:8,pointHoverRadius:10,type:'scatter',showLine:false}]},options:{...base,scales:{x:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10}},grid:{color:grid},border:{display:false},title:{display:true,text:'bits',color:tick,font:{family:'JetBrains Mono',size:10}}},y:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10},callback:v=>v+' dB',maxTicksLimit:5},grid:{color:grid},border:{display:false}}}}});
+  const grid='rgba(255,255,255,0.05)', tick='#555';
+
+  // Shared zoom config — x-axis pan+wheel for waveform & error
+  const zX = {
+    pan:  { enabled:true, mode:'x' },
+    zoom: { wheel:{enabled:true}, pinch:{enabled:true}, mode:'x',
+            onZoom:({chart})=>updateZoomBar(chart.canvas.id==='waveChart'?'wave':'error'),
+            onPan: ({chart})=>updateZoomBar(chart.canvas.id==='waveChart'?'wave':'error') }
+  };
+  // SNR chart: xy zoom so students can isolate a region
+  const zXY = {
+    pan:  { enabled:true, mode:'xy' },
+    zoom: { wheel:{enabled:true}, pinch:{enabled:true}, mode:'xy',
+            onZoom:({chart})=>updateZoomBar('snr'),
+            onPan: ({chart})=>updateZoomBar('snr') }
+  };
+
+  const tt = {backgroundColor:'#232323',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,titleColor:'#e8e8e8',bodyColor:'#888',padding:10,cornerRadius:8};
+  const base = {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    plugins:{ legend:{display:false}, tooltip:tt, zoom:zX },
+    scales:{ x:{display:false}, y:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10},maxTicksLimit:5},grid:{color:grid},border:{display:false}} }
+  };
+
+  waveChart = new Chart(document.getElementById('waveChart'), {
+    type:'line',
+    data:{ labels:[], datasets:[
+      {label:'Original', data:[], borderColor:'#5b9cf6', borderWidth:1.5, pointRadius:0, tension:0.4, fill:false},
+      {label:'Quantized',data:[], borderColor:'#ff6500', borderWidth:3,   pointRadius:0, tension:0, stepped:true, fill:false},
+      {label:'_fill',    data:[], borderColor:'transparent', borderWidth:0, pointRadius:0, tension:0, stepped:true,
+        fill:{target:0,above:'rgba(249,115,22,0.3)',below:'rgba(249,115,22,0.3)'}}
+    ]},
+    options:{...base, scales:{...base.scales,y:{...base.scales.y,min:-1.4,max:1.4}}},
+    plugins:[levelPlugin, markerPlugin]
+  });
+
+  errorChart = new Chart(document.getElementById('errorChart'), {
+    type:'line',
+    data:{ labels:[], datasets:[{label:'Error',data:[],borderColor:'#f87171',borderWidth:1,pointRadius:0,fill:true,backgroundColor:'rgba(248,113,113,0.08)'}]},
+    options:{...base},
+    plugins:[markerPlugin]
+  });
+
+  snrChart = new Chart(document.getElementById('snrChart'), {
+    type:'line',
+    data:{ labels:Array.from({length:17},(_,i)=>i), datasets:[
+      {label:'SNR',    data:[], borderColor:'#4ade80', borderWidth:2, pointRadius:0, tension:0.3, fill:true, backgroundColor:'rgba(74,222,128,0.04)'},
+      {label:'Current',data:[], backgroundColor:'#f97316', borderColor:'#f97316', pointRadius:8, pointHoverRadius:10, type:'scatter', showLine:false}
+    ]},
+    options:{...base,
+      plugins:{...base.plugins, zoom:zXY},
+      scales:{
+        x:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10}},grid:{color:grid},border:{display:false},title:{display:true,text:'bits',color:tick,font:{family:'JetBrains Mono',size:10}}},
+        y:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10},callback:v=>v+' dB',maxTicksLimit:5},grid:{color:grid},border:{display:false}}
+      }
+    },
+    plugins:[markerPlugin]
+  });
+
+  // Bind click handlers for marker placement
+  document.getElementById('waveChart') .addEventListener('click', e => onChartClick(e, waveChart,  'wave'));
+  document.getElementById('errorChart').addEventListener('click', e => onChartClick(e, errorChart, 'error'));
+  document.getElementById('snrChart')  .addEventListener('click', e => onChartClick(e, snrChart,   'snr'));
 }
 
 /* ════════════════════════════════════════════════════════
