@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADC Lab — Experiment</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  .lab-layout { display: flex; flex-direction: column; min-height: calc(100vh - 56px); }
+  .lab-main   { flex: 1; padding: 24px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+  /* Step panels */
+  .step-panel { display: none; }
+  .step-panel.active { display: block; }
+
+  /* Two-col lab grid */
+  .lab-grid { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .lab-grid { grid-template-columns: 1fr; } }
+
+  /* Stats row */
+  .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 12px; }
+
+  /* Quality bar */
+  .qual-wrap { background: var(--s2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; margin-bottom: 12px; }
+  .qual-top  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .snr-track { height: 6px; background: var(--s3); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+  .snr-fill  { height: 100%; border-radius: 3px; transition: width 0.35s ease, background 0.35s ease; }
+  .snr-ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); font-family: var(--mono); }
+
+  /* Bit meter */
+  .bit-meter { display: flex; gap: 2px; margin-top: 6px; }
+  .bit-bar { flex:1; height:3px; border-radius:2px; background:var(--s3); transition:background 0.2s; }
+  .bit-bar.on { background:var(--text); }
+
+  /* Charts */
+  .charts-col { display: flex; flex-direction: column; gap: 12px; }
+  .chart-header { padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--s2); border-radius: var(--r-lg) var(--r-lg) 0 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .chart-title { display: flex; align-items: center; gap: 7px; }
+  .chart-title h3 { font-family: var(--mono); font-size: 10px; color: var(--muted2); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+  .legend { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted2); }
+  .legend-line { width: 14px; height: 2px; border-radius: 1px; }
+  .legend-dot  { width: 8px; height: 8px; border-radius: 50%; }
+  .rms-badge { font-family: var(--mono); font-size: 10px; color: var(--muted2); background: var(--s3); border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; }
+  .chart-canvas-wrap { padding: 10px 14px; }
+
+  /* Mode tabs inside signal source */
+  .mode-tabs { display:flex;gap:3px;background:var(--s2);padding:3px;border-radius:var(--r-sm);margin-bottom:14px; }
+  .mode-tab  { flex:1;padding:5px;font-size:11px;font-family:var(--mono);font-weight:500;text-align:center;border-radius:5px;cursor:pointer;color:var(--muted);border:none;background:transparent;transition:all 0.15s; }
+  .mode-tab.active { background:var(--s4);color:var(--text);border:1px solid var(--border2); }
+  .mode-tab:hover:not(.active) { color:var(--muted2); }
+
+  /* Mic visualizer */
+  #mic-canvas { width:100%;height:80px;border-radius:var(--r-sm);background:var(--s2);display:block; }
+
+  /* Data table section */
+  .readings-wrap { overflow-x: auto; }
+  .empty-state { padding: 32px; text-align: center; color: var(--muted2); font-size: 13px; }
+
+  /* Notebook */
+  .notebook-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .notebook-grid { grid-template-columns: 1fr; } }
+
+  /* Report */
+  .report-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .report-meta { background: var(--s2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 14px 16px; }
+  .report-meta .key { font-size: 11px; color: var(--muted2); font-family: var(--mono); margin-bottom: 3px; }
+  .report-meta .val { font-size: 15px; font-weight: 500; }
+
+  /* Nav buttons at bottom */
+  .lab-footer { border-top: 1px solid var(--border); background: var(--s1); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; bottom: 0; z-index: 10; }
+
+  /* Auto-save indicator */
+  .save-indicator { font-family: var(--mono); font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+  .hidden { display: none !important; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+  .dot-pulse { animation: pulse 2s infinite; }
+
+  /* ── TOOLTIP (fixed JS-positioned) ── */
+  #g-tip { display:none;position:fixed;z-index:99999;pointer-events:none;opacity:0;transition:opacity 0.15s ease,transform 0.15s ease;transform:translateY(6px);width:240px;background:#232323;border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:13px 15px;box-shadow:0 16px 48px rgba(0,0,0,0.7); }
+  #g-tip.show { opacity:1;transform:translateY(0); }
+  #g-tip .gt-icon  { font-size:20px;display:block;margin-bottom:6px; }
+  #g-tip .gt-title { font-family:var(--mono);font-size:11px;font-weight:700;color:#e8e8e8;margin-bottom:5px;letter-spacing:.3px; }
+  #g-tip .gt-body  { font-size:12px;color:#999;line-height:1.65; }
+  #g-tip .gt-arr   { position:absolute;bottom:-8px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid rgba(255,255,255,0.18); }
+  #g-tip .gt-arr::after { content:'';position:absolute;top:-9px;left:-7px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:7px solid #232323; }
+  .tip { border-bottom:1.5px dashed rgba(255,255,255,0.28);color:var(--text);cursor:help;font-weight:500; }
+</style>
+</head>
+<body>
+
+<!-- Global tooltip -->
+<div id="g-tip">
+  <span class="gt-icon"  id="gt-icon"></span>
+  <div  class="gt-title" id="gt-title"></div>
+  <div  class="gt-body"  id="gt-body"></div>
+  <div  class="gt-arr"   id="gt-arr"></div>
+</div>
+
+<nav>
+  <a href="index.html" class="nav-logo"><span class="logo-dot"></span>ADC Lab</a>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="lab.html" class="active">Experiment</a>
+  </div>
+</nav>
+
+<!-- Step indicator -->
+<div class="step-bar" id="step-bar">
+  <div class="step-item active" onclick="goStep(1)" id="si1"><span class="step-num" id="sn1">1</span>Setup</div>
+  <div class="step-connector"></div>
+  <div class="step-item" onclick="goStep(2)" id="si2"><span class="step-num" id="sn2">2</span>Signal</div>
+  <div class="step-connector"></div>
+  <div class="step-item" onclick="goStep(3)" id="si3"><span class="step-num" id="sn3">3</span>Experiments</div>
+  <div class="step-connector"></div>
+  <div class="step-item" onclick="goStep(4)" id="si4"><span class="step-num" id="sn4">4</span>Notebook</div>
+  <div class="step-connector"></div>
+  <div class="step-item" onclick="goStep(5)" id="si5"><span class="step-num" id="sn5">5</span>Report</div>
+</div>
+
+<div class="lab-layout">
+<div class="lab-main">
+
+<!-- ════════════════════════════════════
+     STEP 1: STUDENT SETUP
+════════════════════════════════════ -->
+<div class="step-panel active" id="step1">
+  <h2 style="margin-bottom:6px;">Student Setup</h2>
+  <p style="margin-bottom:28px;font-size:14px;">Enter your details before beginning the experiment. This information will appear in your lab report.</p>
+
+  <div style="max-width:640px;">
+    <div class="card">
+      <div class="card-header"><div class="dot dot-white dot-pulse"></div><h3>Student Information</h3></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:0;">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Full Name *</label>
+            <input class="form-input" id="s-name" type="text" placeholder="e.g. Swayam Marfatia">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Registration Number *</label>
+            <input class="form-input" id="s-reg" type="text" placeholder="e.g. RA2511002010080">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Department</label>
+            <input class="form-input" id="s-dept" type="text" value="Mechanical Engineering">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date</label>
+            <input class="form-input" id="s-date" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Experiment Title</label>
+            <input class="form-input" id="s-title" type="text" value="ADC Resolution & Noise Simulator">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Section / Batch</label>
+            <input class="form-input" id="s-batch" type="text" placeholder="e.g. Section B">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-info" style="margin-top:16px;">
+      <span>💾</span>
+      <span>Your data is auto-saved in your browser. You can close and return to continue.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     STEP 2: SIGNAL SOURCE
+════════════════════════════════════ -->
+<div class="step-panel" id="step2">
+  <h2 style="margin-bottom:6px;">Signal Source</h2>
+  <p style="margin-bottom:24px;font-size:14px;">Choose how to provide the input signal. You can record your voice, use a waveform generator, or upload data from a CSV file.</p>
+
+  <div class="mode-tabs" style="max-width:480px;">
+    <button class="mode-tab active" onclick="setSignalMode('mic')"  id="stab-mic">🎤 Microphone</button>
+    <button class="mode-tab"        onclick="setSignalMode('gen')"  id="stab-gen">⚡ Generator</button>
+    <button class="mode-tab"        onclick="setSignalMode('csv')"  id="stab-csv">📂 CSV Upload</button>
+  </div>
+
+  <!-- Microphone panel -->
+  <div id="sig-mic" style="max-width:640px;">
+    <div class="card">
+      <div class="card-header"><div class="dot dot-red dot-pulse"></div><h3>Live Microphone Recording</h3></div>
+      <div class="card-body">
+        <div class="alert alert-warn" style="margin-bottom:16px;">
+          <span>⚠️</span>
+          <span>Requires microphone permission. Works on HTTPS (the hosted site) — not on local file://</span>
+        </div>
+        <canvas id="mic-canvas"></canvas>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:16px;justify-content:center;flex-wrap:wrap;">
+          <div style="text-align:center;">
+            <button class="rec-btn idle" id="rec-btn" onclick="toggleRecording()">🎤</button>
+            <div style="font-size:11px;color:var(--muted2);margin-top:8px;" id="rec-label">Click to record</div>
+          </div>
+          <div style="flex:1;min-width:200px;">
+            <div style="font-size:12px;color:var(--muted2);margin-bottom:6px;">Recording duration</div>
+            <div class="ctrl-row"><span style="font-size:12px;color:var(--muted2);">Max length</span><span class="ctrl-val" id="rec-dur-val">5 s</span></div>
+            <input type="range" id="rec-dur" min="2" max="10" value="5" step="1" oninput="document.getElementById('rec-dur-val').textContent=this.value+' s'">
+          </div>
+        </div>
+        <div id="rec-status" class="alert alert-success hidden" style="margin-top:12px;">
+          <span>✓</span><span id="rec-status-text">Recording ready</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generator panel -->
+  <div id="sig-gen" class="hidden" style="max-width:640px;">
+    <div class="card">
+      <div class="card-header"><div class="dot dot-blue"></div><h3>Signal Generator</h3></div>
+      <div class="card-body">
+        <div style="margin-bottom:16px;">
+          <label class="form-label">Waveform Type</label>
+          <div class="mode-tabs" style="margin-bottom:0;">
+            <button class="mode-tab active" onclick="setGenWave('sine')"     id="gtab-sine">Sine</button>
+            <button class="mode-tab"        onclick="setGenWave('square')"   id="gtab-square">Square</button>
+            <button class="mode-tab"        onclick="setGenWave('sawtooth')" id="gtab-saw">Sawtooth</button>
+            <button class="mode-tab"        onclick="setGenWave('chirp')"    id="gtab-chirp">Chirp</button>
+          </div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span>Frequency</span><span class="ctrl-val" id="gen-freq-val">2 Hz</span></div>
+          <input type="range" id="gen-freq" min="1" max="8" value="2" step="1" oninput="updateGen()">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span>Amplitude</span><span class="ctrl-val" id="gen-amp-val">100%</span></div>
+          <input type="range" id="gen-amp" min="10" max="100" value="100" step="5" oninput="updateGen()">
+        </div>
+        <div style="position:relative;height:100px;border-radius:var(--r-sm);overflow:hidden;background:var(--s2);border:1px solid var(--border);margin-top:8px;">
+          <canvas id="gen-preview"></canvas>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:6px;">Preview of generated signal (250 samples shown)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CSV panel -->
+  <div id="sig-csv" class="hidden" style="max-width:640px;">
+    <div class="card">
+      <div class="card-header"><div class="dot dot-yellow"></div><h3>CSV Data Upload</h3></div>
+      <div class="card-body">
+        <div class="upload-zone" id="csv-drop" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleCSVDrop(event)">
+          <input type="file" accept=".csv,.txt" onchange="handleCSVFile(this.files[0])">
+          <span class="up-icon">📂</span>
+          <strong>Drop your CSV file here or click to browse</strong>
+          <p>Single column (values) or two columns (time, value) · Numbers only</p>
+        </div>
+        <div class="card" style="margin-top:12px;background:var(--s2);">
+          <div class="card-body" style="font-family:var(--mono);font-size:12px;color:var(--muted2);line-height:2;">
+            <strong style="color:var(--muted3);display:block;margin-bottom:4px;">Format examples:</strong>
+            0.123<br>-0.456<br>0.789<br>
+            <span style="color:var(--muted);font-size:11px;">or two-column: &nbsp;</span>0.001, 0.123
+          </div>
+        </div>
+        <div id="csv-ok" class="alert alert-success hidden" style="margin-top:10px;">
+          <span>✓</span><span id="csv-ok-text">Loaded</span>
+          <button onclick="clearCSVSig()" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;">✕</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info" style="margin-top:16px;max-width:640px;" id="sig-ready-msg">
+    <span>ℹ️</span><span id="sig-ready-text">No signal selected yet. Choose a source above.</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     STEP 3: EXPERIMENTS
+════════════════════════════════════ -->
+<div class="step-panel" id="step3">
+  <h2 style="margin-bottom:6px;">Run Experiments</h2>
+  <p style="margin-bottom:20px;font-size:14px;">
+    Adjust the ADC parameters and observe the effect on signal quality. Use the <strong>"Record Reading"</strong> button to log each data point into your results table.
+  </p>
+
+  <div class="lab-grid">
+
+    <!-- Controls -->
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+      <!-- Live metrics -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label"><span class="tip" data-icon="🎚️" data-title="Quantization Levels" data-body="Total discrete steps = 2ⁿ where n is the bit depth. More levels = finer resolution = less quantization error.">Levels</span></div>
+          <div class="stat-val" id="stat-levels">16</div>
+          <div class="stat-sub">2ⁿ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span class="tip" data-icon="📊" data-title="Signal-to-Noise Ratio" data-body="How much louder the signal is than the noise, in decibels. Higher is always better. CD quality ≈ 96 dB.">SNR</span></div>
+          <div class="stat-val" id="stat-snr">25.8</div>
+          <div class="stat-sub">dB</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span class="tip" data-icon="🔢" data-title="Effective Number of Bits" data-body="Actual resolution achieved = hardware bits + oversampling gain. ENOB = n + log₂(osRate)/2.">ENOB</span></div>
+          <div class="stat-val" id="stat-enob">4.0</div>
+          <div class="stat-sub">bits</div>
+        </div>
+      </div>
+
+      <!-- Quality bar -->
+      <div class="qual-wrap">
+        <div class="qual-top">
+          <span style="font-size:11px;color:var(--muted2);">Signal quality</span>
+          <span id="q-badge" class="badge">Poor</span>
+        </div>
+        <div class="snr-track"><div class="snr-fill" id="snr-fill" style="width:15%;background:var(--coral);"></div></div>
+        <div class="snr-ticks"><span>Noisy</span><span>FM</span><span>CD</span><span>Studio</span></div>
+      </div>
+
+      <!-- ADC Settings -->
+      <div class="card">
+        <div class="card-header"><div class="dot dot-coral"></div><h3>ADC Settings</h3></div>
+        <div class="card-body">
+          <div class="ctrl">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="🎚️" data-title="Bit Depth" data-body="Number of bits per sample. Each extra bit halves the step size and adds ~6 dB SNR. Formula: Levels = 2ⁿ.">Bit Depth</span>
+              <span class="ctrl-val" id="bits-val">4-bit</span>
+            </div>
+            <input type="range" id="bits" min="2" max="16" value="4" step="1" oninput="simUpdate()">
+            <div class="bit-meter" id="bit-meter"></div>
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="📡" data-title="Oversampling" data-body="Sample osRate× faster, then average. Random noise cancels. Each 4× oversampling = +1 effective bit = +6 dB SNR.">Oversampling</span>
+              <span class="ctrl-val" id="os-val">1×</span>
+            </div>
+            <input type="range" id="osRate" min="0" max="6" value="0" step="1" oninput="simUpdate()">
+            <div style="display:flex;justify-content:space-between;margin-top:4px;">
+              <span style="font-size:10px;color:var(--muted);font-family:var(--mono);">1×</span>
+              <span style="font-size:10px;color:var(--muted);font-family:var(--mono);">64×</span>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="ctrl" style="margin-bottom:0;">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="🌡️" data-title="Noise Floor" data-body="Background noise before the ADC — simulates thermal noise, EMI, or power supply ripple.">Noise Floor</span>
+              <span class="ctrl-val" id="noise-val">0%</span>
+            </div>
+            <input type="range" id="noiseFloor" min="0" max="30" value="0" step="1" oninput="simUpdate()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Record reading button -->
+      <button class="btn btn-primary" onclick="recordReading()" style="width:100%;">
+        📋 Record This Reading
+      </button>
+      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:-8px;">Adds current settings + SNR to your results table</div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-col">
+
+      <div class="card">
+        <div class="chart-header">
+          <div class="chart-title"><div class="dot dot-white"></div>
+            <h3>
+              <span class="tip" data-icon="🌊" data-title="Original Signal" data-body="True analog signal before ADC conversion.">Original</span>
+              &nbsp;vs&nbsp;
+              <span class="tip" data-icon="🪜" data-title="Quantized Signal" data-body="ADC output. Staircase shape = rounding to nearest level. More bits = smaller steps.">Quantized</span>
+              &nbsp;Waveform
+            </h3>
+          </div>
+          <div class="legend">
+            <span class="legend-item"><span class="legend-line" style="background:#5b9cf6;"></span>Original</span>
+            <span class="legend-item"><span class="legend-line" style="background:#ff6500;"></span>Quantized</span>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap"><div style="position:relative;height:180px;"><canvas id="waveChart"></canvas></div></div>
+      </div>
+
+      <div class="card">
+        <div class="chart-header">
+          <div class="chart-title"><div class="dot dot-coral"></div>
+            <h3><span class="tip" data-icon="📉" data-title="Quantization Error" data-body="Difference between original and quantized at each sample. This IS the noise — ideally flat and low amplitude.">Quantization Error</span>&nbsp;— noise signal</h3>
+          </div>
+          <span class="rms-badge" id="rms-badge">RMS: 0.0000</span>
+        </div>
+        <div class="chart-canvas-wrap"><div style="position:relative;height:110px;"><canvas id="errorChart"></canvas></div></div>
+      </div>
+
+      <div class="card">
+        <div class="chart-header">
+          <div class="chart-title"><div class="dot dot-green"></div>
+            <h3><span class="tip" data-icon="📊" data-title="SNR vs Bit Depth" data-body="Green curve = theoretical SNR. Oversampling shifts it upward. Orange dot = your current settings.">SNR</span>&nbsp;vs Bit Depth</h3>
+          </div>
+          <div class="legend">
+            <span class="legend-item"><span class="legend-line" style="background:#4ade80;"></span>Theory</span>
+            <span class="legend-item"><span class="legend-dot" style="background:#f97316;"></span>You</span>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap"><div style="position:relative;height:130px;"><canvas id="snrChart"></canvas></div></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Data table -->
+  <div style="margin-top:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <h3>Recorded Readings</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="clearReadings()">Clear All</button>
+        <button class="btn btn-outline btn-sm" onclick="exportReadingsCSV()">⬇ Export CSV</button>
+      </div>
+    </div>
+    <div class="card readings-wrap">
+      <table class="data-table" id="readings-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Bit Depth</th>
+            <th>Oversampling</th>
+            <th>Noise Floor</th>
+            <th>Levels (2ⁿ)</th>
+            <th>SNR (dB)</th>
+            <th>ENOB</th>
+            <th>RMS Error</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="readings-body">
+          <tr><td colspan="10" class="empty-state">No readings yet — adjust the sliders and click "Record This Reading"</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     STEP 4: NOTEBOOK
+════════════════════════════════════ -->
+<div class="step-panel" id="step4">
+  <h2 style="margin-bottom:6px;">Lab Notebook</h2>
+  <p style="margin-bottom:24px;font-size:14px;">Record your observations, analysis, and conclusions here. This will be included in your final report.</p>
+
+  <div class="notebook-grid">
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Aim</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-aim" placeholder="State the aim of this experiment...">To simulate the digitization effects of an Analog-to-Digital Converter (ADC) at various bit resolutions, visualize quantization noise, and demonstrate how oversampling reduces signal degradation.</textarea>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Apparatus</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-apparatus">- Computer with modern web browser (Chrome/Firefox/Edge)
+- Microphone (built-in or external)
+- ADC Resolution & Noise Simulator (web application)
+- Signal generator (sine, square, sawtooth waves)
+- Lab notebook for recording observations</textarea>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Theory</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-theory" style="min-height:140px;">An ADC converts a continuous analog signal into a discrete digital representation. The key parameters are:
+
+Bit Depth (n): Determines quantization levels = 2ⁿ. Each level corresponds to a voltage step of (Full Scale) / 2ⁿ.
+
+Quantization Noise: The rounding error introduced when mapping a sample to the nearest level. RMS noise ≈ step/√12.
+
+Theoretical SNR: SNR ≈ 6.02n + 1.76 dB (per bit, no oversampling).
+
+Oversampling: Sampling M times faster and averaging. Each 4× oversampling adds +6 dB SNR ≈ +1 bit effective resolution.</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-green"></div><h3>Observations</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-obs" style="min-height:160px;" placeholder="Describe what you observed during the experiments. What happened to the waveform as you changed bit depth? How did oversampling affect the noise?"></textarea>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-green"></div><h3>Analysis &amp; Calculations</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-calc" style="min-height:120px;" placeholder="Compare your recorded SNR values with the theoretical formula. Calculate the percentage error. Note any discrepancies."></textarea>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot dot-yellow"></div><h3>Inference &amp; Conclusion</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-conclusion" style="min-height:120px;" placeholder="What conclusions can you draw? Was the theoretical SNR formula verified? How effective was oversampling? What are the practical implications?"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     STEP 5: REPORT
+════════════════════════════════════ -->
+<div class="step-panel" id="step5">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+    <div>
+      <h2 style="margin-bottom:4px;">Lab Report</h2>
+      <p style="font-size:14px;">Summary of your experiment. Print or export below.</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Print</button>
+      <button class="btn btn-outline btn-sm" onclick="exportFullReport()">⬇ Export Full CSV</button>
+    </div>
+  </div>
+
+  <!-- Student meta -->
+  <div class="report-summary" id="report-meta"></div>
+
+  <!-- Data table -->
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header"><div class="dot dot-white"></div><h3>Experimental Data</h3></div>
+    <div class="readings-wrap">
+      <table class="data-table" id="report-table">
+        <thead>
+          <tr><th>#</th><th>Bit Depth</th><th>Oversampling</th><th>Levels</th><th>SNR (dB)</th><th>ENOB</th><th>RMS Error</th><th>Notes</th></tr>
+        </thead>
+        <tbody id="report-body">
+          <tr><td colspan="8" class="empty-state">No data recorded yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Notebook sections -->
+  <div class="notebook-grid">
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Aim</h3></div>
+        <div class="card-body"><p id="report-aim" style="font-size:13px;white-space:pre-wrap;"></p></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Theory</h3></div>
+        <div class="card-body"><p id="report-theory" style="font-size:13px;white-space:pre-wrap;"></p></div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-green"></div><h3>Observations</h3></div>
+        <div class="card-body"><p id="report-obs" style="font-size:13px;white-space:pre-wrap;color:var(--muted2);">No observations recorded yet.</p></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot dot-yellow"></div><h3>Conclusion</h3></div>
+        <div class="card-body"><p id="report-conclusion" style="font-size:13px;white-space:pre-wrap;color:var(--muted2);">No conclusion recorded yet.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /lab-main -->
+
+<!-- Bottom nav -->
+<div class="lab-footer no-print">
+  <div class="save-indicator">
+    <div class="dot dot-green dot-pulse"></div>
+    <span id="save-label">Auto-saved</span>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn btn-ghost" id="btn-back" onclick="prevStep()" style="display:none;">← Back</button>
+    <button class="btn btn-primary" id="btn-next" onclick="nextStep()">Next →</button>
+  </div>
+</div>
+</div><!-- /lab-layout -->
+
+<script>
+/* ════════════════════════════════════════════════════════
+   TOOLTIP ENGINE (same as simulator — JS-positioned, fixed)
+════════════════════════════════════════════════════════ */
+(function(){
+  const tip=document.getElementById('g-tip'), gtI=document.getElementById('gt-icon'),
+        gtT=document.getElementById('gt-title'), gtB=document.getElementById('gt-body'),
+        gtArr=document.getElementById('gt-arr');
+  let hT=null;
+  function pos(el){
+    gtI.textContent=el.dataset.icon||''; gtT.textContent=el.dataset.title||''; gtB.textContent=el.dataset.body||'';
+    tip.style.display='block'; tip.classList.remove('show');
+    const r=el.getBoundingClientRect(), W=240, PAD=10, GAP=10;
+    let left=r.left+r.width/2-W/2;
+    left=Math.max(PAD,Math.min(left,window.innerWidth-W-PAD));
+    const aX=Math.max(14,Math.min(r.left+r.width/2-left-8,W-22));
+    gtArr.style.left=aX+'px';
+    const tipH=tip.offsetHeight;
+    let top, above=r.top-tipH-GAP>=PAD;
+    top=above?r.top-tipH-GAP:r.bottom+GAP;
+    if(above){gtArr.style.bottom='-8px';gtArr.style.top='auto';gtArr.style.borderTop='8px solid rgba(255,255,255,0.18)';gtArr.style.borderBottom='none';}
+    else{gtArr.style.top='-8px';gtArr.style.bottom='auto';gtArr.style.borderBottom='8px solid rgba(255,255,255,0.18)';gtArr.style.borderTop='none';}
+    tip.style.left=left+'px';tip.style.top=top+'px';
+    requestAnimationFrame(()=>tip.classList.add('show'));
+  }
+  function hide(){hT=setTimeout(()=>{tip.classList.remove('show');setTimeout(()=>{if(!tip.classList.contains('show'))tip.style.display='none';},160);},60);}
+  document.addEventListener('mouseover',e=>{const el=e.target.closest('.tip[data-title]');if(!el)return;clearTimeout(hT);pos(el);});
+  document.addEventListener('mouseout', e=>{if(e.target.closest('.tip[data-title]'))hide();});
+})();
+
+/* ════════════════════════════════════════════════════════
+   STEP NAVIGATION
+════════════════════════════════════════════════════════ */
+let currentStep = 1;
+const TOTAL_STEPS = 5;
+const stepDone = [false,false,false,false,false];
+
+function goStep(n) {
+  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('step'+n).classList.add('active');
+  document.querySelectorAll('.step-item').forEach((el,i) => {
+    el.classList.remove('active');
+    if (i+1 === n) el.classList.add('active');
+    else if (stepDone[i]) el.classList.add('done');
+    else el.classList.remove('done');
+  });
+  document.getElementById('btn-back').style.display = n > 1 ? '' : 'none';
+  document.getElementById('btn-next').textContent = n === TOTAL_STEPS ? '✓ Done' : 'Next →';
+  currentStep = n;
+  if (n === 5) buildReport();
+  window.scrollTo(0, 0);
+}
+function nextStep() {
+  if (currentStep === 1) { saveStudentInfo(); stepDone[0] = true; }
+  if (currentStep === 2) { stepDone[1] = true; }
+  if (currentStep === 3) { stepDone[2] = true; }
+  if (currentStep === 4) { saveNotebook(); stepDone[3] = true; }
+  if (currentStep < TOTAL_STEPS) goStep(currentStep + 1);
+}
+function prevStep() { if (currentStep > 1) goStep(currentStep - 1); }
+
+/* ════════════════════════════════════════════════════════
+   AUTO-SAVE (localStorage)
+════════════════════════════════════════════════════════ */
+function saveAll() {
+  const data = {
+    name:    document.getElementById('s-name').value,
+    reg:     document.getElementById('s-reg').value,
+    dept:    document.getElementById('s-dept').value,
+    date:    document.getElementById('s-date').value,
+    title:   document.getElementById('s-title').value,
+    batch:   document.getElementById('s-batch').value,
+    aim:     document.getElementById('nb-aim').value,
+    apparatus: document.getElementById('nb-apparatus').value,
+    theory:  document.getElementById('nb-theory').value,
+    obs:     document.getElementById('nb-obs').value,
+    calc:    document.getElementById('nb-calc').value,
+    conclusion: document.getElementById('nb-conclusion').value,
+    readings: readings
+  };
+  localStorage.setItem('adc-lab', JSON.stringify(data));
+  document.getElementById('save-label').textContent = 'Saved ' + new Date().toLocaleTimeString();
+}
+function loadSaved() {
+  const raw = localStorage.getItem('adc-lab');
+  if (!raw) return;
+  try {
+    const d = JSON.parse(raw);
+    if (d.name)    document.getElementById('s-name').value    = d.name;
+    if (d.reg)     document.getElementById('s-reg').value     = d.reg;
+    if (d.dept)    document.getElementById('s-dept').value    = d.dept;
+    if (d.date)    document.getElementById('s-date').value    = d.date;
+    if (d.title)   document.getElementById('s-title').value   = d.title;
+    if (d.batch)   document.getElementById('s-batch').value   = d.batch;
+    if (d.aim)     document.getElementById('nb-aim').value    = d.aim;
+    if (d.apparatus) document.getElementById('nb-apparatus').value = d.apparatus;
+    if (d.theory)  document.getElementById('nb-theory').value = d.theory;
+    if (d.obs)     document.getElementById('nb-obs').value    = d.obs;
+    if (d.calc)    document.getElementById('nb-calc').value   = d.calc;
+    if (d.conclusion) document.getElementById('nb-conclusion').value = d.conclusion;
+    if (d.readings) { readings = d.readings; renderReadingsTable(); }
+  } catch(e) {}
+}
+function saveStudentInfo() { saveAll(); }
+function saveNotebook()    { saveAll(); }
+setInterval(saveAll, 10000); // auto-save every 10s
+
+/* ════════════════════════════════════════════════════════
+   SIGNAL SOURCE
+════════════════════════════════════════════════════════ */
+let signalMode = 'mic';
+let generatedSignal = null;
+let csvSignal = null;
+let recordedSignal = null;
+let genWave = 'sine';
+let genPreviewChart = null;
+
+function setSignalMode(m) {
+  signalMode = m;
+  ['mic','gen','csv'].forEach(k => {
+    document.getElementById('stab-'+k).classList.toggle('active', k===m);
+    document.getElementById('sig-'+k).classList.toggle('hidden', k!==m);
+  });
+  updateSignalReadyMsg();
+}
+
+function updateSignalReadyMsg() {
+  const el = document.getElementById('sig-ready-msg');
+  const txt = document.getElementById('sig-ready-text');
+  let ready = false, msg = '';
+  if (signalMode === 'mic' && recordedSignal) { ready = true; msg = `✓ Recorded audio ready (${recordedSignal.length} samples)`; }
+  else if (signalMode === 'gen') { ready = true; msg = '✓ Generator signal ready — proceed to experiments'; }
+  else if (signalMode === 'csv' && csvSignal) { ready = true; msg = `✓ CSV data ready (${csvSignal.length} samples)`; }
+  else if (signalMode === 'mic') { msg = 'Record audio using the microphone above, then continue.'; }
+  else if (signalMode === 'csv') { msg = 'Upload a CSV file to use as the input signal.'; }
+  el.className = 'alert ' + (ready ? 'alert-success' : 'alert-info');
+  txt.textContent = msg || 'Choose a signal source above.';
+}
+
+/* ── Generator ── */
+function setGenWave(w) {
+  genWave = w;
+  ['sine','square','saw','chirp'].forEach(k => document.getElementById('gtab-'+k).classList.toggle('active', k===w||k===w));
+  // fix: match IDs
+  document.getElementById('gtab-sine').classList.toggle('active', w==='sine');
+  document.getElementById('gtab-square').classList.toggle('active', w==='square');
+  document.getElementById('gtab-saw').classList.toggle('active', w==='sawtooth');
+  document.getElementById('gtab-chirp').classList.toggle('active', w==='chirp');
+  updateGen();
+}
+function updateGen() {
+  const freq = +document.getElementById('gen-freq').value;
+  const amp  = +document.getElementById('gen-amp').value / 100;
+  document.getElementById('gen-freq-val').textContent = freq + ' Hz';
+  document.getElementById('gen-amp-val').textContent  = Math.round(amp*100) + '%';
+  const N = 250;
+  generatedSignal = Array.from({length:N}, (_,i) => {
+    const t = i/N;
+    let v;
+    if (genWave === 'sine')     v = Math.sin(2*Math.PI*freq*t);
+    else if (genWave === 'square')   v = Math.sin(2*Math.PI*freq*t) >= 0 ? 0.9 : -0.9;
+    else if (genWave === 'sawtooth') v = 2*((freq*t)%1)-1;
+    else                              v = Math.sin(2*Math.PI*(freq + freq*t)*t); // chirp
+    return v * amp;
+  });
+  drawGenPreview();
+  simUpdate();
+}
+function drawGenPreview() {
+  if (!generatedSignal) return;
+  const canvas = document.getElementById('gen-preview');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth; canvas.height = 100;
+  ctx.fillStyle = '#1f1f1f'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = '#5b9cf6'; ctx.lineWidth = 1.5; ctx.beginPath();
+  generatedSignal.forEach((v,i) => {
+    const x = i/generatedSignal.length * canvas.width;
+    const y = (1 - (v+1)/2) * canvas.height;
+    i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+}
+
+/* ── CSV Upload ── */
+function handleCSVDrop(e) {
+  e.preventDefault();
+  document.getElementById('csv-drop').classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleCSVFile(e.dataTransfer.files[0]);
+}
+function handleCSVFile(file) {
+  const r = new FileReader();
+  r.onload = e => {
+    const lines = e.target.result.trim().split(/\r?\n/).filter(l=>l.trim());
+    const vals = [];
+    lines.forEach(l => { const p=l.split(/[,;\t]/); const n=parseFloat(p.length>1?p[1]:p[0]); if(!isNaN(n)) vals.push(n); });
+    if (vals.length < 4) { alert('Need at least 4 numeric values.'); return; }
+    const mn=Math.min(...vals), mx=Math.max(...vals), rng=mx-mn||1;
+    csvSignal = vals.map(v => ((v-mn)/rng)*2-1);
+    document.getElementById('csv-ok-text').textContent = `✓ ${csvSignal.length} samples loaded from ${file.name}`;
+    document.getElementById('csv-ok').classList.remove('hidden');
+    updateSignalReadyMsg(); simUpdate();
+  };
+  r.readAsText(file);
+}
+function clearCSVSig() {
+  csvSignal = null;
+  document.getElementById('csv-ok').classList.add('hidden');
+  updateSignalReadyMsg();
+}
+
+/* ── Microphone ── */
+let mediaRecorder = null, audioChunks = [], micStream = null;
+let audioCtx = null, micAnalyser = null, micAnimFrame = null;
+let isRecording = false;
+
+function toggleRecording() {
+  if (!isRecording) startRecording(); else stopRecording();
+}
+async function startRecording() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micAnalyser = audioCtx.createAnalyser();
+    micAnalyser.fftSize = 2048;
+    const src = audioCtx.createMediaStreamSource(micStream);
+    src.connect(micAnalyser);
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(micStream);
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = processRecording;
+    mediaRecorder.start();
+    isRecording = true;
+    document.getElementById('rec-btn').className = 'rec-btn recording';
+    document.getElementById('rec-btn').textContent = '⏹';
+    document.getElementById('rec-label').textContent = 'Recording...';
+    drawMicWaveform();
+    const dur = +document.getElementById('rec-dur').value * 1000;
+    setTimeout(() => { if (isRecording) stopRecording(); }, dur);
+  } catch(err) {
+    alert('Microphone access denied or not available.\n\nTip: This requires HTTPS. Use the hosted GitHub Pages URL, not a local file.');
+  }
+}
+function stopRecording() {
+  if (!isRecording) return;
+  isRecording = false;
+  mediaRecorder.stop();
+  micStream.getTracks().forEach(t => t.stop());
+  cancelAnimationFrame(micAnimFrame);
+  document.getElementById('rec-btn').className = 'rec-btn done';
+  document.getElementById('rec-btn').textContent = '✓';
+  document.getElementById('rec-label').textContent = 'Processing...';
+}
+async function processRecording() {
+  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+  const arrayBuffer = await blob.arrayBuffer();
+  try {
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    const raw = audioBuffer.getChannelData(0);
+    const step = Math.max(1, Math.floor(raw.length / 1000));
+    let samples = Array.from({length: Math.min(1000, Math.floor(raw.length/step))}, (_,i) => raw[i*step]);
+    const maxAbs = Math.max(...samples.map(Math.abs)) || 1;
+    recordedSignal = samples.map(v => v / maxAbs);
+    document.getElementById('rec-label').textContent = `✓ ${recordedSignal.length} samples captured`;
+    document.getElementById('rec-status-text').textContent = `Recording ready — ${recordedSignal.length} samples captured`;
+    document.getElementById('rec-status').classList.remove('hidden');
+    updateSignalReadyMsg(); simUpdate();
+  } catch(e) {
+    document.getElementById('rec-label').textContent = 'Error processing audio';
+  }
+}
+function drawMicWaveform() {
+  const canvas = document.getElementById('mic-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth; canvas.height = 80;
+  function draw() {
+    micAnimFrame = requestAnimationFrame(draw);
+    const buf = new Uint8Array(micAnalyser.frequencyBinCount);
+    micAnalyser.getByteTimeDomainData(buf);
+    ctx.fillStyle = '#1f1f1f'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle = '#f87171'; ctx.lineWidth = 1.5; ctx.beginPath();
+    const sw = canvas.width / buf.length;
+    buf.forEach((v,i) => {
+      const x = i*sw, y = (v/128.0) * canvas.height/2;
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  }
+  draw();
+}
+
+/* ════════════════════════════════════════════════════════
+   ADC SIMULATOR CORE (same algorithm as standalone simulator)
+════════════════════════════════════════════════════════ */
+let currentBits = 4;
+const levelPlugin = {
+  id: 'lvl',
+  afterDraw(chart) {
+    if (currentBits > 7) return;
+    const {ctx,chartArea:{left,right},scales:{y}} = chart;
+    const step = 2/Math.pow(2,currentBits);
+    ctx.save(); ctx.strokeStyle='rgba(255,101,0,0.18)'; ctx.lineWidth=0.8; ctx.setLineDash([3,6]);
+    for (let i=0; i<=Math.pow(2,currentBits); i++) {
+      const val = -1+i*step;
+      if (val<-1.42||val>1.42) continue;
+      const yPx = y.getPixelForValue(val);
+      ctx.beginPath(); ctx.moveTo(left,yPx); ctx.lineTo(right,yPx); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+function getActiveSignal(N, freq) {
+  if (signalMode === 'mic' && recordedSignal) {
+    return Array.from({length:N},(_,i)=>{const idx=(i/N)*(recordedSignal.length-1),lo=Math.floor(idx),hi=Math.min(lo+1,recordedSignal.length-1);return recordedSignal[lo]+(recordedSignal[hi]-recordedSignal[lo])*(idx-lo);});
+  }
+  if (signalMode === 'csv' && csvSignal) {
+    return Array.from({length:N},(_,i)=>{const idx=(i/N)*(csvSignal.length-1),lo=Math.floor(idx),hi=Math.min(lo+1,csvSignal.length-1);return csvSignal[lo]+(csvSignal[hi]-csvSignal[lo])*(idx-lo);});
+  }
+  if (signalMode === 'gen' && generatedSignal) {
+    return Array.from({length:N},(_,i)=>{const idx=(i/N)*(generatedSignal.length-1),lo=Math.floor(idx),hi=Math.min(lo+1,generatedSignal.length-1);return generatedSignal[lo]+(generatedSignal[hi]-generatedSignal[lo])*(idx-lo);});
+  }
+  // default sine
+  return Array.from({length:N},(_,i)=>Math.sin(2*Math.PI*freq*i/N));
+}
+
+function buildSimData(bits, osExp, noisePct) {
+  const N=250, osRate=Math.pow(2,osExp), step=2/Math.pow(2,bits), noiseAmp=(noisePct/100)*0.3;
+  const orig = getActiveSignal(N, 2);
+  const noisy = orig.map(v=>v+(Math.random()-0.5)*2*noiseAmp);
+  let q;
+  if (osRate===1) {
+    q = noisy.map(v=>Math.round(Math.max(-1,Math.min(1,v))/step)*step);
+  } else {
+    const sN=N*osRate, ss=Array.from({length:sN},(_,i)=>{
+      const idx=(i/sN)*(orig.length-1),lo=Math.floor(idx),hi=Math.min(lo+1,orig.length-1);
+      return orig[lo]+(orig[hi]-orig[lo])*(idx-lo)+(Math.random()-0.5)*2*noiseAmp;
+    });
+    const sq=ss.map(v=>Math.round(Math.max(-1,Math.min(1,v))/step)*step);
+    q=[]; for(let i=0;i<N;i++){let s=0;for(let j=0;j<osRate;j++)s+=sq[i*osRate+j];q.push(s/osRate);}
+  }
+  const errors=orig.map((v,i)=>q[i]-v);
+  const rms=Math.sqrt(errors.reduce((s,e)=>s+e*e,0)/errors.length);
+  const snr=6.02*bits+1.76+10*Math.log10(osRate);
+  return {original:orig,quantized:q,errors,levels:Math.pow(2,bits),snr,enob:bits+osExp/2,rms};
+}
+
+let waveChart, errorChart, snrChart;
+
+function simUpdate() {
+  if (!waveChart) return;
+  const bits=+document.getElementById('bits').value,
+        osExp=+document.getElementById('osRate').value,
+        noise=+document.getElementById('noiseFloor').value,
+        osRate=Math.pow(2,osExp);
+  currentBits=bits;
+  document.getElementById('bits-val').textContent=bits+'-bit';
+  document.getElementById('os-val').textContent=osRate+'×';
+  document.getElementById('noise-val').textContent=noise+'%';
+  updateBitMeter(bits);
+  const d=buildSimData(bits,osExp,noise);
+  document.getElementById('stat-levels').textContent=d.levels.toLocaleString();
+  document.getElementById('stat-snr').textContent=d.snr.toFixed(1);
+  document.getElementById('stat-enob').textContent=d.enob.toFixed(1);
+  document.getElementById('rms-badge').textContent='RMS: '+d.rms.toFixed(4);
+  const qi=qualityInfo(d.snr);
+  const badge=document.getElementById('q-badge');
+  badge.textContent=qi.label; badge.className='badge';
+  badge.style.cssText=`background:${qi.col}1a;color:${qi.col};border:1px solid ${qi.col}44;font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;`;
+  document.getElementById('snr-fill').style.width=Math.min(100,Math.max(0,(d.snr-20)/80*100))+'%';
+  document.getElementById('snr-fill').style.background=qi.col;
+  const fa=Math.max(0.10,0.45-(bits-2)*0.025);
+  waveChart.data.datasets[2].fill={target:0,above:`rgba(249,115,22,${fa})`,below:`rgba(249,115,22,${fa})`};
+  const L=Array.from({length:d.original.length},(_,i)=>i);
+  waveChart.data.labels=L; waveChart.data.datasets[0].data=d.original; waveChart.data.datasets[1].data=d.quantized; waveChart.data.datasets[2].data=d.quantized; waveChart.update('none');
+  errorChart.data.labels=L; errorChart.data.datasets[0].data=d.errors; errorChart.update('none');
+  const curve=Array.from({length:17},(_,b)=>b===0?null:parseFloat((6.02*b+1.76+10*Math.log10(osRate)).toFixed(1)));
+  snrChart.data.datasets[0].data=curve;
+  snrChart.data.datasets[1].data=Array.from({length:17},(_,i)=>i===bits?parseFloat(d.snr.toFixed(1)):null);
+  snrChart.update('none');
+}
+
+function qualityInfo(snr) {
+  if (snr<30) return {label:'Poor',     col:'#ef4444'};
+  if (snr<50) return {label:'Fair',     col:'#f97316'};
+  if (snr<70) return {label:'Good',     col:'#eab308'};
+  if (snr<90) return {label:'CD Quality',col:'#5b9cf6'};
+  return             {label:'Studio',   col:'#4ade80'};
+}
+
+function initBitMeter() {
+  const m=document.getElementById('bit-meter');
+  for(let i=0;i<16;i++){const b=document.createElement('div');b.className='bit-bar';b.id='bb-'+i;m.appendChild(b);}
+}
+function updateBitMeter(b){for(let i=0;i<16;i++)document.getElementById('bb-'+i).classList.toggle('on',i<b);}
+
+function initCharts() {
+  const grid='rgba(255,255,255,0.05)',tick='#555';
+  const base={responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#232323',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,titleColor:'#e8e8e8',bodyColor:'#888',padding:10,cornerRadius:8}},scales:{x:{display:false},y:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10},maxTicksLimit:5},grid:{color:grid},border:{display:false}}}};
+  waveChart=new Chart(document.getElementById('waveChart'),{type:'line',data:{labels:[],datasets:[{label:'Original',data:[],borderColor:'#5b9cf6',borderWidth:1.5,pointRadius:0,tension:0.4,fill:false},{label:'Quantized',data:[],borderColor:'#ff6500',borderWidth:3,pointRadius:0,tension:0,stepped:true,fill:false},{label:'_fill',data:[],borderColor:'transparent',borderWidth:0,pointRadius:0,tension:0,stepped:true,fill:{target:0,above:'rgba(249,115,22,0.3)',below:'rgba(249,115,22,0.3)'}}]},options:{...base,scales:{...base.scales,y:{...base.scales.y,min:-1.4,max:1.4}}},plugins:[levelPlugin]});
+  errorChart=new Chart(document.getElementById('errorChart'),{type:'line',data:{labels:[],datasets:[{label:'Error',data:[],borderColor:'#f87171',borderWidth:1,pointRadius:0,fill:true,backgroundColor:'rgba(248,113,113,0.08)'}]},options:{...base}});
+  snrChart=new Chart(document.getElementById('snrChart'),{type:'line',data:{labels:Array.from({length:17},(_,i)=>i),datasets:[{label:'SNR',data:[],borderColor:'#4ade80',borderWidth:2,pointRadius:0,tension:0.3,fill:true,backgroundColor:'rgba(74,222,128,0.04)'},{label:'Current',data:[],backgroundColor:'#f97316',borderColor:'#f97316',pointRadius:8,pointHoverRadius:10,type:'scatter',showLine:false}]},options:{...base,scales:{x:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10}},grid:{color:grid},border:{display:false},title:{display:true,text:'bits',color:tick,font:{family:'JetBrains Mono',size:10}}},y:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10},callback:v=>v+' dB',maxTicksLimit:5},grid:{color:grid},border:{display:false}}}}});
+}
+
+/* ════════════════════════════════════════════════════════
+   READINGS TABLE
+════════════════════════════════════════════════════════ */
+let readings = [];
+
+function recordReading() {
+  const bits=+document.getElementById('bits').value,
+        osExp=+document.getElementById('osRate').value,
+        noise=+document.getElementById('noiseFloor').value;
+  const d = buildSimData(bits, osExp, noise);
+  const entry = {
+    bits, osRate: Math.pow(2,osExp), noise, levels: d.levels,
+    snr: +d.snr.toFixed(2), enob: +d.enob.toFixed(2), rms: +d.rms.toFixed(5),
+    notes: '', ts: new Date().toLocaleTimeString()
+  };
+  readings.push(entry);
+  renderReadingsTable();
+  saveAll();
+  // flash the table
+  const btn = event.target;
+  btn.textContent = '✓ Recorded!';
+  setTimeout(() => btn.textContent = '📋 Record This Reading', 1200);
+}
+
+function renderReadingsTable() {
+  const tbody = document.getElementById('readings-body');
+  if (readings.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No readings yet — adjust the sliders and click "Record This Reading"</td></tr>';
+    return;
+  }
+  tbody.innerHTML = readings.map((r,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td><span class="badge badge-blue">${r.bits}-bit</span></td>
+      <td>${r.osRate}×</td>
+      <td>${r.noise}%</td>
+      <td>${r.levels.toLocaleString()}</td>
+      <td><strong style="color:var(--text)">${r.snr}</strong></td>
+      <td>${r.enob}</td>
+      <td style="font-family:var(--mono);font-size:11px;">${r.rms}</td>
+      <td><input value="${r.notes}" onchange="readings[${i}].notes=this.value;saveAll()" style="background:transparent;border:none;color:var(--muted3);font-size:12px;width:120px;outline:none;" placeholder="add note..."></td>
+      <td><button onclick="readings.splice(${i},1);renderReadingsTable();saveAll();" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;">✕</button></td>
+    </tr>
+  `).join('');
+}
+
+function clearReadings() {
+  if (readings.length && !confirm('Clear all readings?')) return;
+  readings = []; renderReadingsTable(); saveAll();
+}
+
+function exportReadingsCSV() {
+  if (!readings.length) { alert('No readings to export.'); return; }
+  const header = 'Reading,Bits,Oversampling,NoiseFloor,Levels,SNR_dB,ENOB,RMS_Error,Notes\n';
+  const rows = readings.map((r,i) => `${i+1},${r.bits},${r.osRate}×,${r.noise}%,${r.levels},${r.snr},${r.enob},${r.rms},"${r.notes}"`).join('\n');
+  download('adc_readings.csv', header + rows);
+}
+
+/* ════════════════════════════════════════════════════════
+   REPORT BUILDER
+════════════════════════════════════════════════════════ */
+function buildReport() {
+  const name  = document.getElementById('s-name').value  || '—';
+  const reg   = document.getElementById('s-reg').value   || '—';
+  const dept  = document.getElementById('s-dept').value  || '—';
+  const date  = document.getElementById('s-date').value  || '—';
+  const title = document.getElementById('s-title').value || '—';
+  const batch = document.getElementById('s-batch').value || '—';
+  document.getElementById('report-meta').innerHTML = [
+    ['Student Name', name], ['Reg. No.', reg], ['Department', dept],
+    ['Date', date], ['Experiment', title], ['Section', batch]
+  ].map(([k,v]) => `<div class="report-meta"><div class="key">${k}</div><div class="val">${v}</div></div>`).join('');
+
+  // copy readings
+  const rb = document.getElementById('report-body');
+  if (readings.length) {
+    rb.innerHTML = readings.map((r,i) => `<tr><td>${i+1}</td><td>${r.bits}-bit</td><td>${r.osRate}×</td><td>${r.levels.toLocaleString()}</td><td>${r.snr}</td><td>${r.enob}</td><td>${r.rms}</td><td>${r.notes}</td></tr>`).join('');
+  } else {
+    rb.innerHTML = '<tr><td colspan="8" class="empty-state">No data recorded yet</td></tr>';
+  }
+
+  // notebook
+  document.getElementById('report-aim').textContent        = document.getElementById('nb-aim').value        || '—';
+  document.getElementById('report-theory').textContent     = document.getElementById('nb-theory').value     || '—';
+  document.getElementById('report-obs').textContent        = document.getElementById('nb-obs').value        || 'No observations recorded.';
+  document.getElementById('report-conclusion').textContent = document.getElementById('nb-conclusion').value || 'No conclusion recorded.';
+}
+
+function exportFullReport() {
+  const name  = document.getElementById('s-name').value  || '';
+  const date  = document.getElementById('s-date').value  || '';
+  let csv = `ADC Resolution & Noise Lab Report\n`;
+  csv += `Student: ${name}\nReg: ${document.getElementById('s-reg').value}\nDate: ${date}\n\n`;
+  csv += `AIM\n"${document.getElementById('nb-aim').value}"\n\n`;
+  csv += `THEORY\n"${document.getElementById('nb-theory').value}"\n\n`;
+  csv += `OBSERVATIONS\n"${document.getElementById('nb-obs').value}"\n\n`;
+  csv += `CONCLUSION\n"${document.getElementById('nb-conclusion').value}"\n\n`;
+  csv += `EXPERIMENTAL DATA\nReading,Bits,Oversampling,Levels,SNR_dB,ENOB,RMS_Error,Notes\n`;
+  readings.forEach((r,i) => csv += `${i+1},${r.bits},${r.osRate}×,${r.levels},${r.snr},${r.enob},${r.rms},"${r.notes}"\n`);
+  download(`ADC_Lab_Report_${name.replace(/ /g,'_')}.csv`, csv);
+}
+
+function download(filename, text) {
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(text);
+  a.download = filename; a.click();
+}
+
+/* ════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', () => {
+  // Set today's date
+  document.getElementById('s-date').valueAsDate = new Date();
+  // Init simulator
+  initBitMeter(); initCharts(); simUpdate();
+  // Load generator preview
+  setGenWave('sine'); updateGen();
+  // Load saved data
+  loadSaved();
+});
+</script>
+</body>
+</html>
