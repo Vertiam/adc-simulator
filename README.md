@@ -311,6 +311,6 @@ FFT        : O(N log N),  Hanning window
 |  **Team Leader** | Swayam Viral Marfatia | RA2511002010080 |
 |  **Member** | Narayan Murthy | RA2511002010124 |
 |  **Member** | Shirly Oviya | RA2511054010030 |
-|  **Member** | Mithasha P Sishaj | — |
+|  **Member** | Mithasha P Sishaj | RA2511053050040 |
 
 > *"The goal is to turn invisible noise into something you can see, drag a slider, and understand."* — Qt π's
