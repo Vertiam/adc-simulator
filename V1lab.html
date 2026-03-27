@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADC Lab — Experiment</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
+<style>
+  .lab-layout { display: flex; flex-direction: column; min-height: calc(100vh - 56px); }
+  .lab-main   { flex: 1; padding: 24px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+  /* Step panels */
+  .step-panel { display: none; }
+  .step-panel.active { display: block; }
+
+  /* Two-col lab grid */
+  .lab-grid { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .lab-grid { grid-template-columns: 1fr; } }
+
+  /* Stats row */
+  .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 12px; }
+
+  /* Quality bar */
+  .qual-wrap { background: var(--s2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 10px 12px; margin-bottom: 12px; }
+  .qual-top  { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .snr-track { height: 6px; background: var(--s3); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+  .snr-fill  { height: 100%; border-radius: 3px; transition: width 0.35s ease, background 0.35s ease; }
+  .snr-ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); font-family: var(--mono); }
+
+  /* Bit meter */
+  .bit-meter { display: flex; gap: 2px; margin-top: 6px; }
+  .bit-bar { flex:1; height:3px; border-radius:2px; background:var(--s3); transition:background 0.2s; }
+  .bit-bar.on { background:var(--text); }
+
+  /* Charts */
+  .charts-col { display: flex; flex-direction: column; gap: 12px; }
+  .chart-header { padding: 9px 14px; border-bottom: 1px solid var(--border); background: var(--s2); border-radius: var(--r-lg) var(--r-lg) 0 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .chart-title { display: flex; align-items: center; gap: 7px; }
+  .chart-title h3 { font-family: var(--mono); font-size: 10px; color: var(--muted2); font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+  .legend { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted2); }
+  .legend-line { width: 14px; height: 2px; border-radius: 1px; }
+  .legend-dot  { width: 8px; height: 8px; border-radius: 50%; }
+  .rms-badge { font-family: var(--mono); font-size: 10px; color: var(--muted2); background: var(--s3); border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; }
+  .chart-canvas-wrap { padding: 10px 14px; }
+
+  /* Mode tabs inside signal source */
+  .mode-tabs { display:flex;gap:3px;background:var(--s2);padding:3px;border-radius:var(--r-sm);margin-bottom:14px; }
+  .mode-tab  { flex:1;padding:5px;font-size:11px;font-family:var(--mono);font-weight:500;text-align:center;border-radius:5px;cursor:pointer;color:var(--muted);border:none;background:transparent;transition:all 0.15s; }
+  .mode-tab.active { background:var(--s4);color:var(--text);border:1px solid var(--border2); }
+  .mode-tab:hover:not(.active) { color:var(--muted2); }
+
+  /* Mic visualizer */
+  #mic-canvas { width:100%;height:80px;border-radius:var(--r-sm);background:var(--s2);display:block; }
+
+  /* Data table section */
+  .readings-wrap { overflow-x: auto; }
+  .empty-state { padding: 32px; text-align: center; color: var(--muted2); font-size: 13px; }
+
+  /* Notebook */
+  .notebook-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .notebook-grid { grid-template-columns: 1fr; } }
+
+  /* Report */
+  .report-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .report-meta { background: var(--s2); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 14px 16px; }
+  .report-meta .key { font-size: 11px; color: var(--muted2); font-family: var(--mono); margin-bottom: 3px; }
+  .report-meta .val { font-size: 15px; font-weight: 500; }
+
+  /* Nav buttons at bottom */
+  .lab-footer { border-top: 1px solid var(--border); background: var(--s1); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; bottom: 0; z-index: 10; }
+
+  /* Auto-save indicator */
+  .save-indicator { font-family: var(--mono); font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+  .hidden { display: none !important; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+  .dot-pulse { animation: pulse 2s infinite; }
+
+  /* ── VALIDATION ── */
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    15%     { transform: translateX(-6px); }
+    30%     { transform: translateX(6px); }
+    45%     { transform: translateX(-4px); }
+    60%     { transform: translateX(4px); }
+    75%     { transform: translateX(-2px); }
+    90%     { transform: translateX(2px); }
+  }
+  .field-error .form-input {
+    border-color: rgba(248,113,113,0.7) !important;
+    background: rgba(248,113,113,0.05) !important;
+    animation: shake 0.45s ease;
+  }
+  .field-error .form-label { color: var(--red) !important; }
+  .field-err-msg {
+    font-size: 11px; color: var(--red); margin-top: 5px;
+    display: none; font-family: var(--mono);
+  }
+  .field-error .field-err-msg { display: block; }
+  .form-input.valid-field {
+    border-color: rgba(74,222,128,0.4) !important;
+  }
+  #step1-error {
+    display: none;
+    align-items: center; gap: 8px;
+    padding: 10px 14px; margin-top: 16px;
+    background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.25);
+    border-radius: var(--r-sm);
+    font-size: 13px; color: var(--red);
+    animation: shake 0.45s ease;
+  }
+  #step1-error.visible { display: flex; }
+  /* Lock icon on step bar items when not yet reachable */
+  .step-item.locked { opacity: 0.4; cursor: not-allowed; }
+  .step-item.locked:hover { color: var(--muted2) !important; }
+
+  /* ── TOOLTIP (fixed JS-positioned) ── */
+  #g-tip { display:none;position:fixed;z-index:99999;pointer-events:none;opacity:0;transition:opacity 0.15s ease,transform 0.15s ease;transform:translateY(6px);width:240px;background:#232323;border:1px solid rgba(255,255,255,0.18);border-radius:10px;padding:13px 15px;box-shadow:0 16px 48px rgba(0,0,0,0.7); }
+  #g-tip.show { opacity:1;transform:translateY(0); }
+  #g-tip .gt-icon  { font-size:20px;display:block;margin-bottom:6px; }
+  #g-tip .gt-title { font-family:var(--mono);font-size:11px;font-weight:700;color:#e8e8e8;margin-bottom:5px;letter-spacing:.3px; }
+  #g-tip .gt-body  { font-size:12px;color:#999;line-height:1.65; }
+  #g-tip .gt-arr   { position:absolute;bottom:-8px;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid rgba(255,255,255,0.18); }
+  #g-tip .gt-arr::after { content:'';position:absolute;top:-9px;left:-7px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:7px solid #232323; }
+  .tip { border-bottom:1.5px dashed rgba(255,255,255,0.28);color:var(--text);cursor:help;font-weight:500; }
+
+  /* ── CHART TOOLBAR ── */
+  .chart-tools { display:flex; align-items:center; gap:3px; flex-shrink:0; }
+  .ct-btn {
+    position:relative; width:26px; height:26px; border-radius:5px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--s3); border:1px solid var(--border);
+    cursor:pointer; font-size:12px; color:var(--muted2);
+    transition:all 0.15s; flex-shrink:0; line-height:1;
+  }
+  .ct-btn:hover { background:var(--s4); color:var(--text); border-color:var(--border2); }
+  .ct-btn.zoom-active { background:rgba(91,156,246,0.15); border-color:rgba(91,156,246,0.4); color:#5b9cf6; }
+  .ct-btn.mark-active { background:rgba(251,191,36,0.15); border-color:rgba(251,191,36,0.4); color:#fbbf24; }
+  .ct-sep { width:1px; height:14px; background:var(--border2); margin:0 2px; flex-shrink:0; }
+
+  /* Override card overflow so toolbar tooltips are never clipped */
+  .charts-col .card { overflow: visible; }
+  /* Chart header needs its own bg + radius since card overflow is now visible */
+  .charts-col .card .chart-header {
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+  /* Canvas wrap and inner divs must stay clipped to avoid chart bleeding */
+  .charts-col .chart-canvas-wrap { overflow: hidden; }
+
+  /* Toolbar mini-tooltip — fixed position via JS, shown on ct-btn hover */
+  #ct-tip {
+    position: fixed; z-index: 99998; pointer-events: none;
+    opacity: 0; transition: opacity 0.12s ease;
+    background: #1a1a1a; color: #aaa;
+    font-size: 10px; font-family: var(--mono);
+    padding: 4px 9px; border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.14);
+    white-space: nowrap;
+  }
+  #ct-tip.show { opacity: 1; }
+
+  /* ── ZOOM INFO BAR ── */
+  .zoom-bar {
+    display:none; padding:4px 14px;
+    border-top:1px solid var(--border); background:var(--s2);
+    font-family:var(--mono); font-size:10px; color:var(--muted);
+    justify-content:space-between; align-items:center; gap:8px;
+  }
+  .zoom-bar.on { display:flex; }
+  .zoom-reset-link {
+    color:var(--blue); cursor:pointer; text-decoration:underline;
+    font-size:10px; font-family:var(--mono); background:none; border:none; padding:0;
+  }
+
+  /* ── MARKER LIST ── */
+  .marker-panel {
+    display:none; flex-direction:column; gap:3px;
+    padding:7px 14px 9px; border-top:1px solid var(--border);
+    background:var(--s2); max-height:92px; overflow-y:auto;
+  }
+  .marker-panel.on { display:flex; }
+  .mk-row { display:flex; align-items:center; gap:7px; font-size:11px; font-family:var(--mono); }
+  .mk-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .mk-name { flex:1; min-width:0; background:transparent; border:none; color:var(--muted3); font-size:11px; font-family:var(--mono); outline:none; }
+  .mk-name:focus { color:var(--text); }
+  .mk-coord { color:var(--muted); font-size:10px; flex-shrink:0; }
+  .mk-del { background:none; border:none; color:var(--muted); cursor:pointer; font-size:12px; padding:0 2px; flex-shrink:0; }
+  .mk-del:hover { color:var(--red); }
+</style>
+</head>
+<body>
+
+<!-- Global tooltip for .tip terms -->
+<div id="g-tip">
+  <span class="gt-icon"  id="gt-icon"></span>
+  <div  class="gt-title" id="gt-title"></div>
+  <div  class="gt-body"  id="gt-body"></div>
+  <div  class="gt-arr"   id="gt-arr"></div>
+</div>
+<!-- Toolbar mini-tooltip (fixed, never clipped) -->
+<div id="ct-tip"></div>
+
+<nav>
+  <a href="index.html" class="nav-logo"><span class="logo-dot"></span>ADC Lab</a>
+  <div class="nav-links">
+    <a href="index.html">Home</a>
+    <a href="lab.html" class="active">Experiment</a>
+  </div>
+</nav>
+
+<!-- Step indicator -->
+<div class="step-bar" id="step-bar">
+  <div class="step-item active" onclick="goStep(1)" id="si1"><span class="step-num" id="sn1">1</span>Setup</div>
+  <div class="step-connector"></div>
+  <div class="step-item" onclick="goStep(2)" id="si2"><span class="step-num" id="sn2">2</span>Signal</div>
+  <div class="step-connector"></div>
+  <div class="step-item" onclick="goStep(3)" id="si3"><span class="step-num" id="sn3">3</span>Experiments</div>
+  <div class="step-connector"></div>
+  <div class="step-item" onclick="goStep(4)" id="si4"><span class="step-num" id="sn4">4</span>Notebook</div>
+  <div class="step-connector"></div>
+  <div class="step-item" onclick="goStep(5)" id="si5"><span class="step-num" id="sn5">5</span>Report</div>
+</div>
+
+<div class="lab-layout">
+<div class="lab-main">
+
+<!-- ════════════════════════════════════
+     STEP 1: STUDENT SETUP
+════════════════════════════════════ -->
+<div class="step-panel active" id="step1">
+  <h2 style="margin-bottom:6px;">Student Setup</h2>
+  <p style="margin-bottom:28px;font-size:14px;">Enter your details before beginning the experiment. This information will appear in your lab report.</p>
+
+  <div style="max-width:640px;">
+    <div class="card">
+      <div class="card-header"><div class="dot dot-white dot-pulse"></div><h3>Student Information</h3></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:0;">
+        <div class="form-grid">
+          <div class="form-group" id="fg-name">
+            <label class="form-label">Full Name <span style="color:var(--red);">*</span></label>
+            <input class="form-input" id="s-name" type="text" placeholder="e.g. Joe Gibbs" oninput="liveValidate('s-name','fg-name')">
+            <div class="field-err-msg">Full name is required</div>
+          </div>
+          <div class="form-group" id="fg-reg">
+            <label class="form-label">Registration Number <span style="color:var(--red);">*</span></label>
+            <input class="form-input" id="s-reg" type="text" placeholder="e.g. RA25XXXXXXXXXXX" oninput="liveValidate('s-reg','fg-reg')">
+            <div class="field-err-msg">Registration number is required</div>
+          </div>
+          <div class="form-group" id="fg-dept">
+            <label class="form-label">Department <span style="color:var(--red);">*</span></label>
+            <input class="form-input" id="s-dept" type="text" placeholder="e.g. Mechanical Engineering" oninput="liveValidate('s-dept','fg-dept')">
+            <div class="field-err-msg">Department is required</div>
+          </div>
+          <div class="form-group" id="fg-date">
+            <label class="form-label">Date <span style="color:var(--red);">*</span></label>
+            <input class="form-input" id="s-date" type="date" oninput="liveValidate('s-date','fg-date')">
+            <div class="field-err-msg">Date is required</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Experiment Title</label>
+            <input class="form-input" id="s-title" type="text" value="ADC Resolution & Noise Simulator">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Section </label>
+            <input class="form-input" id="s-batch" type="text" placeholder="e.g. B ">
+          </div>
+        </div>
+        <!-- Validation error banner -->
+        <div id="step1-error">
+          <span>⚠️</span>
+          <span id="step1-error-text">Please fill in all required fields before continuing.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-info" style="margin-top:16px;">
+      <span>💾</span>
+      <span>Your data is auto-saved in your browser. You can close and return to continue.</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     STEP 2: SIGNAL SOURCE
+════════════════════════════════════ -->
+<div class="step-panel" id="step2">
+  <h2 style="margin-bottom:6px;">Signal Source</h2>
+  <p style="margin-bottom:24px;font-size:14px;">Choose how to provide the input signal. You can record your voice, use a waveform generator, or upload data from a CSV file.</p>
+
+  <div class="mode-tabs" style="max-width:480px;">
+    <button class="mode-tab active" onclick="setSignalMode('mic')"  id="stab-mic">🎤 Microphone</button>
+    <button class="mode-tab"        onclick="setSignalMode('gen')"  id="stab-gen">⚡ Generator</button>
+    <button class="mode-tab"        onclick="setSignalMode('csv')"  id="stab-csv">📂 CSV Upload</button>
+  </div>
+
+  <!-- Microphone panel -->
+  <div id="sig-mic" style="max-width:640px;">
+    <div class="card">
+      <div class="card-header"><div class="dot dot-red dot-pulse"></div><h3>Live Microphone Recording</h3></div>
+      <div class="card-body">
+        <div class="alert alert-warn" style="margin-bottom:16px;">
+          <span>⚠️</span>
+          <span>Requires microphone permission. Works on HTTPS (the hosted site) — not on local file://</span>
+        </div>
+        <canvas id="mic-canvas"></canvas>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:16px;justify-content:center;flex-wrap:wrap;">
+          <div style="text-align:center;">
+            <button class="rec-btn idle" id="rec-btn" onclick="toggleRecording()">🎤</button>
+            <div style="font-size:11px;color:var(--muted2);margin-top:8px;" id="rec-label">Click to record</div>
+          </div>
+          <div style="flex:1;min-width:200px;">
+            <div style="font-size:12px;color:var(--muted2);margin-bottom:6px;">Recording duration</div>
+            <div class="ctrl-row"><span style="font-size:12px;color:var(--muted2);">Max length</span><span class="ctrl-val" id="rec-dur-val">5 s</span></div>
+            <input type="range" id="rec-dur" min="2" max="10" value="5" step="1" oninput="document.getElementById('rec-dur-val').textContent=this.value+' s'">
+          </div>
+        </div>
+        <div id="rec-status" class="alert alert-success hidden" style="margin-top:12px;">
+          <span>✓</span><span id="rec-status-text">Recording ready</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generator panel -->
+  <div id="sig-gen" class="hidden" style="max-width:640px;">
+    <div class="card">
+      <div class="card-header"><div class="dot dot-blue"></div><h3>Signal Generator</h3></div>
+      <div class="card-body">
+        <div style="margin-bottom:16px;">
+          <label class="form-label">Waveform Type</label>
+          <div class="mode-tabs" style="margin-bottom:0;">
+            <button class="mode-tab active" onclick="setGenWave('sine')"     id="gtab-sine">Sine</button>
+            <button class="mode-tab"        onclick="setGenWave('square')"   id="gtab-square">Square</button>
+            <button class="mode-tab"        onclick="setGenWave('sawtooth')" id="gtab-saw">Sawtooth</button>
+            <button class="mode-tab"        onclick="setGenWave('chirp')"    id="gtab-chirp">Chirp</button>
+          </div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span>Frequency</span><span class="ctrl-val" id="gen-freq-val">2 Hz</span></div>
+          <input type="range" id="gen-freq" min="1" max="8" value="2" step="1" oninput="updateGen()">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-row"><span>Amplitude</span><span class="ctrl-val" id="gen-amp-val">100%</span></div>
+          <input type="range" id="gen-amp" min="10" max="100" value="100" step="5" oninput="updateGen()">
+        </div>
+        <div style="position:relative;height:100px;border-radius:var(--r-sm);overflow:hidden;background:var(--s2);border:1px solid var(--border);margin-top:8px;">
+          <canvas id="gen-preview"></canvas>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:6px;">Preview of generated signal (250 samples shown)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CSV panel -->
+  <div id="sig-csv" class="hidden" style="max-width:640px;">
+    <div class="card">
+      <div class="card-header"><div class="dot dot-yellow"></div><h3>CSV Data Upload</h3></div>
+      <div class="card-body">
+        <div class="upload-zone" id="csv-drop" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleCSVDrop(event)">
+          <input type="file" accept=".csv,.txt" onchange="handleCSVFile(this.files[0])">
+          <span class="up-icon">📂</span>
+          <strong>Drop your CSV file here or click to browse</strong>
+          <p>Single column (values) or two columns (time, value) · Numbers only</p>
+        </div>
+        <div class="card" style="margin-top:12px;background:var(--s2);">
+          <div class="card-body" style="font-family:var(--mono);font-size:12px;color:var(--muted2);line-height:2;">
+            <strong style="color:var(--muted3);display:block;margin-bottom:4px;">Format examples:</strong>
+            0.123<br>-0.456<br>0.789<br>
+            <span style="color:var(--muted);font-size:11px;">or two-column: &nbsp;</span>0.001, 0.123
+          </div>
+        </div>
+        <div id="csv-ok" class="alert alert-success hidden" style="margin-top:10px;">
+          <span>✓</span><span id="csv-ok-text">Loaded</span>
+          <button onclick="clearCSVSig()" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;">✕</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info" style="margin-top:16px;max-width:640px;" id="sig-ready-msg">
+    <span>ℹ️</span><span id="sig-ready-text">No signal selected yet. Choose a source above.</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     STEP 3: EXPERIMENTS
+════════════════════════════════════ -->
+<div class="step-panel" id="step3">
+  <h2 style="margin-bottom:6px;">Run Experiments</h2>
+  <p style="margin-bottom:20px;font-size:14px;">
+    Adjust the ADC parameters and observe the effect on signal quality. Use the <strong>"Record Reading"</strong> button to log each data point into your results table.
+  </p>
+
+  <div class="lab-grid">
+
+    <!-- Controls -->
+    <div style="display:flex;flex-direction:column;gap:12px;">
+
+      <!-- Live metrics -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label"><span class="tip" data-icon="🎚️" data-title="Quantization Levels" data-body="Total discrete steps = 2ⁿ where n is the bit depth. More levels = finer resolution = less quantization error.">Levels</span></div>
+          <div class="stat-val" id="stat-levels">16</div>
+          <div class="stat-sub">2ⁿ</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span class="tip" data-icon="📊" data-title="Signal-to-Noise Ratio" data-body="How much louder the signal is than the noise, in decibels. Higher is always better. CD quality ≈ 96 dB.">SNR</span></div>
+          <div class="stat-val" id="stat-snr">25.8</div>
+          <div class="stat-sub">dB</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label"><span class="tip" data-icon="🔢" data-title="Effective Number of Bits" data-body="Actual resolution achieved = hardware bits + oversampling gain. ENOB = n + log₂(osRate)/2.">ENOB</span></div>
+          <div class="stat-val" id="stat-enob">4.0</div>
+          <div class="stat-sub">bits</div>
+        </div>
+      </div>
+
+      <!-- Quality bar -->
+      <div class="qual-wrap">
+        <div class="qual-top">
+          <span style="font-size:11px;color:var(--muted2);">Signal quality</span>
+          <span id="q-badge" class="badge">Poor</span>
+        </div>
+        <div class="snr-track"><div class="snr-fill" id="snr-fill" style="width:15%;background:var(--coral);"></div></div>
+        <div class="snr-ticks"><span>Noisy</span><span>FM</span><span>CD</span><span>Studio</span></div>
+      </div>
+
+      <!-- ADC Settings -->
+      <div class="card">
+        <div class="card-header"><div class="dot dot-coral"></div><h3>ADC Settings</h3></div>
+        <div class="card-body">
+          <div class="ctrl">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="🎚️" data-title="Bit Depth" data-body="Number of bits per sample. Each extra bit halves the step size and adds ~6 dB SNR. Formula: Levels = 2ⁿ.">Bit Depth</span>
+              <span class="ctrl-val" id="bits-val">4-bit</span>
+            </div>
+            <input type="range" id="bits" min="2" max="16" value="4" step="1" oninput="simUpdate()">
+            <div class="bit-meter" id="bit-meter"></div>
+          </div>
+          <div class="ctrl">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="📡" data-title="Oversampling" data-body="Sample osRate× faster, then average. Random noise cancels. Each 4× oversampling = +1 effective bit = +6 dB SNR.">Oversampling</span>
+              <span class="ctrl-val" id="os-val">1×</span>
+            </div>
+            <input type="range" id="osRate" min="0" max="6" value="0" step="1" oninput="simUpdate()">
+            <div style="display:flex;justify-content:space-between;margin-top:4px;">
+              <span style="font-size:10px;color:var(--muted);font-family:var(--mono);">1×</span>
+              <span style="font-size:10px;color:var(--muted);font-family:var(--mono);">64×</span>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="ctrl" style="margin-bottom:0;">
+            <div class="ctrl-row">
+              <span class="tip" data-icon="🌡️" data-title="Noise Floor" data-body="Background noise before the ADC — simulates thermal noise, EMI, or power supply ripple.">Noise Floor</span>
+              <span class="ctrl-val" id="noise-val">0%</span>
+            </div>
+            <input type="range" id="noiseFloor" min="0" max="30" value="0" step="1" oninput="simUpdate()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Record reading button -->
+      <button class="btn btn-primary" onclick="recordReading()" style="width:100%;">
+        📋 Record This Reading
+      </button>
+      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:-8px;">Adds current settings + SNR to your results table</div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-col">
+
+      <div class="card">
+        <div class="chart-header">
+          <div class="chart-title"><div class="dot dot-white"></div>
+            <h3>
+              <span class="tip" data-icon="🌊" data-title="Original Signal" data-body="True analog signal before ADC conversion.">Original</span>
+              &nbsp;vs&nbsp;
+              <span class="tip" data-icon="🪜" data-title="Quantized Signal" data-body="ADC output. Staircase shape = rounding to nearest level. More bits = smaller steps.">Quantized</span>
+              &nbsp;Waveform
+            </h3>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div class="legend">
+              <span class="legend-item"><span class="legend-line" style="background:#5b9cf6;"></span>Original</span>
+              <span class="legend-item"><span class="legend-line" style="background:#ff6500;"></span>Quantized</span>
+            </div>
+            <div class="ct-sep"></div>
+            <div class="chart-tools">
+              <button class="ct-btn" data-tip="Zoom in (scroll wheel also works)"  onclick="doZoom('wave',1.3)">+</button>
+              <button class="ct-btn" data-tip="Zoom out" onclick="doZoom('wave',0.77)">−</button>
+              <button class="ct-btn" data-tip="Reset zoom" onclick="doReset('wave')">⊙</button>
+              <div class="ct-sep"></div>
+              <button class="ct-btn" id="mk-btn-wave" data-tip="Place marker — then click chart" onclick="toggleMarker('wave')">📍</button>
+              <button class="ct-btn" data-tip="Download as PNG" onclick="dlChart('waveChart','waveform')">↓</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap"><div style="position:relative;height:180px;"><canvas id="waveChart"></canvas></div></div>
+        <div class="zoom-bar" id="zbar-wave">
+          <span id="zinfo-wave">Zoomed view</span>
+          <button class="zoom-reset-link" onclick="doReset('wave')">reset zoom</button>
+        </div>
+        <div class="marker-panel" id="mpanel-wave"></div>
+      </div>
+
+      <div class="card">
+        <div class="chart-header">
+          <div class="chart-title"><div class="dot dot-coral"></div>
+            <h3><span class="tip" data-icon="📉" data-title="Quantization Error" data-body="Difference between original and quantized at each sample. This IS the noise — ideally flat and low amplitude.">Quantization Error</span>&nbsp;— noise signal</h3>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span class="rms-badge" id="rms-badge">RMS: 0.0000</span>
+            <div class="ct-sep"></div>
+            <div class="chart-tools">
+              <button class="ct-btn" data-tip="Zoom in"   onclick="doZoom('error',1.3)">+</button>
+              <button class="ct-btn" data-tip="Zoom out"  onclick="doZoom('error',0.77)">−</button>
+              <button class="ct-btn" data-tip="Reset zoom" onclick="doReset('error')">⊙</button>
+              <div class="ct-sep"></div>
+              <button class="ct-btn" id="mk-btn-error" data-tip="Place marker" onclick="toggleMarker('error')">📍</button>
+              <button class="ct-btn" data-tip="Download PNG" onclick="dlChart('errorChart','error')">↓</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap"><div style="position:relative;height:110px;"><canvas id="errorChart"></canvas></div></div>
+        <div class="zoom-bar" id="zbar-error">
+          <span id="zinfo-error">Zoomed view</span>
+          <button class="zoom-reset-link" onclick="doReset('error')">reset zoom</button>
+        </div>
+        <div class="marker-panel" id="mpanel-error"></div>
+      </div>
+
+      <div class="card">
+        <div class="chart-header">
+          <div class="chart-title"><div class="dot dot-green"></div>
+            <h3><span class="tip" data-icon="📊" data-title="SNR vs Bit Depth" data-body="Green curve = theoretical SNR. Oversampling shifts it upward. Orange dot = your current settings.">SNR</span>&nbsp;vs Bit Depth</h3>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div class="legend">
+              <span class="legend-item"><span class="legend-line" style="background:#4ade80;"></span>Theory</span>
+              <span class="legend-item"><span class="legend-dot" style="background:#f97316;"></span>You</span>
+            </div>
+            <div class="ct-sep"></div>
+            <div class="chart-tools">
+              <button class="ct-btn" data-tip="Zoom in"   onclick="doZoom('snr',1.3)">+</button>
+              <button class="ct-btn" data-tip="Zoom out"  onclick="doZoom('snr',0.77)">−</button>
+              <button class="ct-btn" data-tip="Reset zoom" onclick="doReset('snr')">⊙</button>
+              <div class="ct-sep"></div>
+              <button class="ct-btn" id="mk-btn-snr" data-tip="Place marker" onclick="toggleMarker('snr')">📍</button>
+              <button class="ct-btn" data-tip="Download PNG" onclick="dlChart('snrChart','snr_curve')">↓</button>
+            </div>
+          </div>
+        </div>
+        <div class="chart-canvas-wrap"><div style="position:relative;height:130px;"><canvas id="snrChart"></canvas></div></div>
+        <div class="zoom-bar" id="zbar-snr">
+          <span id="zinfo-snr">Zoomed view</span>
+          <button class="zoom-reset-link" onclick="doReset('snr')">reset zoom</button>
+        </div>
+        <div class="marker-panel" id="mpanel-snr"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Data table -->
+  <div style="margin-top:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <h3>Recorded Readings</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="clearReadings()">Clear All</button>
+        <button class="btn btn-outline btn-sm" onclick="exportReadingsCSV()">⬇ Export CSV</button>
+      </div>
+    </div>
+    <div class="card readings-wrap">
+      <table class="data-table" id="readings-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Bit Depth</th>
+            <th>Oversampling</th>
+            <th>Noise Floor</th>
+            <th>Levels (2ⁿ)</th>
+            <th>SNR (dB)</th>
+            <th>ENOB</th>
+            <th>RMS Error</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="readings-body">
+          <tr><td colspan="10" class="empty-state">No readings yet — adjust the sliders and click "Record This Reading"</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     STEP 4: NOTEBOOK
+════════════════════════════════════ -->
+<div class="step-panel" id="step4">
+  <h2 style="margin-bottom:6px;">Lab Notebook</h2>
+  <p style="margin-bottom:24px;font-size:14px;">Record your observations, analysis, and conclusions here. This will be included in your final report.</p>
+
+  <div class="notebook-grid">
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Aim</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-aim" placeholder="State the aim of this experiment...">To simulate the digitization effects of an Analog-to-Digital Converter (ADC) at various bit resolutions, visualize quantization noise, and demonstrate how oversampling reduces signal degradation.</textarea>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Apparatus</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-apparatus">- Computer with modern web browser (Chrome/Firefox/Edge)
+- Microphone (built-in or external)
+- ADC Resolution & Noise Simulator (web application)
+- Signal generator (sine, square, sawtooth waves)
+- Lab notebook for recording observations</textarea>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Theory</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-theory" style="min-height:140px;">An ADC converts a continuous analog signal into a discrete digital representation. The key parameters are:
+
+Bit Depth (n): Determines quantization levels = 2ⁿ. Each level corresponds to a voltage step of (Full Scale) / 2ⁿ.
+
+Quantization Noise: The rounding error introduced when mapping a sample to the nearest level. RMS noise ≈ step/√12.
+
+Theoretical SNR: SNR ≈ 6.02n + 1.76 dB (per bit, no oversampling).
+
+Oversampling: Sampling M times faster and averaging. Each 4× oversampling adds +6 dB SNR ≈ +1 bit effective resolution.</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-green"></div><h3>Observations</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-obs" style="min-height:160px;" placeholder="Describe what you observed during the experiments. What happened to the waveform as you changed bit depth? How did oversampling affect the noise?"></textarea>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-green"></div><h3>Analysis &amp; Calculations</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-calc" style="min-height:120px;" placeholder="Compare your recorded SNR values with the theoretical formula. Calculate the percentage error. Note any discrepancies."></textarea>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot dot-yellow"></div><h3>Inference &amp; Conclusion</h3></div>
+        <div class="card-body">
+          <textarea class="form-textarea" id="nb-conclusion" style="min-height:120px;" placeholder="What conclusions can you draw? Was the theoretical SNR formula verified? How effective was oversampling? What are the practical implications?"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     STEP 5: REPORT
+════════════════════════════════════ -->
+<div class="step-panel" id="step5">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px;">
+    <div>
+      <h2 style="margin-bottom:4px;">Lab Report</h2>
+      <p style="font-size:14px;">Summary of your experiment. Print or export below.</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Print</button>
+      <button class="btn btn-outline btn-sm" onclick="exportFullReport()">⬇ Export Full CSV</button>
+    </div>
+  </div>
+
+  <!-- Student meta -->
+  <div class="report-summary" id="report-meta"></div>
+
+  <!-- Data table -->
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header"><div class="dot dot-white"></div><h3>Experimental Data</h3></div>
+    <div class="readings-wrap">
+      <table class="data-table" id="report-table">
+        <thead>
+          <tr><th>#</th><th>Bit Depth</th><th>Oversampling</th><th>Levels</th><th>SNR (dB)</th><th>ENOB</th><th>RMS Error</th><th>Notes</th></tr>
+        </thead>
+        <tbody id="report-body">
+          <tr><td colspan="8" class="empty-state">No data recorded yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Notebook sections -->
+  <div class="notebook-grid">
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Aim</h3></div>
+        <div class="card-body"><p id="report-aim" style="font-size:13px;white-space:pre-wrap;"></p></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot dot-blue"></div><h3>Theory</h3></div>
+        <div class="card-body"><p id="report-theory" style="font-size:13px;white-space:pre-wrap;"></p></div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header"><div class="dot dot-green"></div><h3>Observations</h3></div>
+        <div class="card-body"><p id="report-obs" style="font-size:13px;white-space:pre-wrap;color:var(--muted2);">No observations recorded yet.</p></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="dot dot-yellow"></div><h3>Conclusion</h3></div>
+        <div class="card-body"><p id="report-conclusion" style="font-size:13px;white-space:pre-wrap;color:var(--muted2);">No conclusion recorded yet.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /lab-main -->
+
+<!-- Bottom nav -->
+<div class="lab-footer no-print">
+  <div class="save-indicator">
+    <div class="dot dot-green dot-pulse"></div>
+    <span id="save-label">Auto-saved</span>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn btn-ghost" id="btn-back" onclick="prevStep()" style="display:none;">← Back</button>
+    <button class="btn btn-primary" id="btn-next" onclick="nextStep()">Next →</button>
+  </div>
+</div>
+</div><!-- /lab-layout -->
+
+<script>
+/* ════════════════════════════════════════════════════════
+   TOOLTIP ENGINE 
+════════════════════════════════════════════════════════ */
+(function(){
+  const tip=document.getElementById('g-tip'), gtI=document.getElementById('gt-icon'),
+        gtT=document.getElementById('gt-title'), gtB=document.getElementById('gt-body'),
+        gtArr=document.getElementById('gt-arr');
+  let hT=null;
+  function pos(el){
+    gtI.textContent=el.dataset.icon||''; gtT.textContent=el.dataset.title||''; gtB.textContent=el.dataset.body||'';
+    tip.style.display='block'; tip.classList.remove('show');
+    const r=el.getBoundingClientRect(), W=240, PAD=10, GAP=10;
+    let left=r.left+r.width/2-W/2;
+    left=Math.max(PAD,Math.min(left,window.innerWidth-W-PAD));
+    const aX=Math.max(14,Math.min(r.left+r.width/2-left-8,W-22));
+    gtArr.style.left=aX+'px';
+    const tipH=tip.offsetHeight;
+    let top, above=r.top-tipH-GAP>=PAD;
+    top=above?r.top-tipH-GAP:r.bottom+GAP;
+    if(above){gtArr.style.bottom='-8px';gtArr.style.top='auto';gtArr.style.borderTop='8px solid rgba(255,255,255,0.18)';gtArr.style.borderBottom='none';}
+    else{gtArr.style.top='-8px';gtArr.style.bottom='auto';gtArr.style.borderBottom='8px solid rgba(255,255,255,0.18)';gtArr.style.borderTop='none';}
+    tip.style.left=left+'px';tip.style.top=top+'px';
+    requestAnimationFrame(()=>tip.classList.add('show'));
+  }
+  function hide(){hT=setTimeout(()=>{tip.classList.remove('show');setTimeout(()=>{if(!tip.classList.contains('show'))tip.style.display='none';},160);},60);}
+  document.addEventListener('mouseover',e=>{const el=e.target.closest('.tip[data-title]');if(!el)return;clearTimeout(hT);pos(el);});
+  document.addEventListener('mouseout', e=>{if(e.target.closest('.tip[data-title]'))hide();});
+})();
+
+/* ── TOOLBAR MINI-TOOLTIP ENGINE ────────────────────────────────
+   Uses position:fixed so it is NEVER clipped by card overflow:hidden.
+   Reads data-tip attribute from .ct-btn elements.
+   Appears BELOW the button (into open space), not above (which
+   would clip into the card header background or outside the card).
+────────────────────────────────────────────────────────────────── */
+(function(){
+  const tip = document.getElementById('ct-tip');
+  let hT = null;
+  document.addEventListener('mouseover', e => {
+    const btn = e.target.closest('.ct-btn[data-tip]');
+    if (!btn) return;
+    clearTimeout(hT);
+    const label = btn.getAttribute('data-tip');
+    if (!label) return;
+    tip.textContent = label;
+    tip.classList.add('show');
+    const r = btn.getBoundingClientRect();
+    // Position below the button, centred
+    let left = r.left + r.width / 2 - tip.offsetWidth / 2;
+    // Clamp to viewport edges with 8px margin
+    left = Math.max(8, Math.min(left, window.innerWidth - tip.offsetWidth - 8));
+    const top = r.bottom + 6;
+    tip.style.left = left + 'px';
+    tip.style.top  = top  + 'px';
+  });
+  document.addEventListener('mouseout', e => {
+    if (!e.target.closest('.ct-btn[data-tip]')) return;
+    hT = setTimeout(() => tip.classList.remove('show'), 60);
+  });
+})();
+
+/* ════════════════════════════════════════════════════════
+   STEP 1 VALIDATION
+   ─────────────────────────────────────────────────────
+   Required fields: name, reg, dept, date.
+   validateStep1() checks each, marks .field-error on
+   failing groups, shows the error banner, and returns
+   false so nextStep() blocks navigation.
+   liveValidate() clears error state as the user types,
+   giving instant positive feedback (green border).
+════════════════════════════════════════════════════════ */
+const REQUIRED_FIELDS = [
+  { id: 's-name', group: 'fg-name', label: 'Full Name' },
+  { id: 's-reg',  group: 'fg-reg',  label: 'Registration Number' },
+  { id: 's-dept', group: 'fg-dept', label: 'Department' },
+  { id: 's-date', group: 'fg-date', label: 'Date' },
+];
+
+function validateStep1() {
+  let valid = true;
+  const missing = [];
+
+  REQUIRED_FIELDS.forEach(f => {
+    const input = document.getElementById(f.id);
+    const group = document.getElementById(f.group);
+    const val = input.value.trim();
+    if (!val) {
+      group.classList.add('field-error');
+      input.classList.remove('valid-field');
+      missing.push(f.label);
+      valid = false;
+    } else {
+      group.classList.remove('field-error');
+      input.classList.add('valid-field');
+    }
+  });
+
+  const banner = document.getElementById('step1-error');
+  const bannerText = document.getElementById('step1-error-text');
+  if (!valid) {
+    bannerText.textContent = `Please fill in: ${missing.join(', ')}`;
+    banner.classList.add('visible');
+    // Re-trigger shake by cloning the node
+    banner.style.animation = 'none';
+    requestAnimationFrame(() => { banner.style.animation = ''; });
+    // Scroll the first failing field into view
+    const firstBad = document.getElementById(REQUIRED_FIELDS.find(f => missing.includes(f.label)).id);
+    firstBad.focus();
+    firstBad.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else {
+    banner.classList.remove('visible');
+  }
+  return valid;
+}
+
+/* Clear error state and show green border as user types */
+function liveValidate(inputId, groupId) {
+  const val = document.getElementById(inputId).value.trim();
+  const group = document.getElementById(groupId);
+  const input = document.getElementById(inputId);
+  if (val) {
+    group.classList.remove('field-error');
+    input.classList.add('valid-field');
+    // Hide banner if all required are now filled
+    if (REQUIRED_FIELDS.every(f => document.getElementById(f.id).value.trim())) {
+      document.getElementById('step1-error').classList.remove('visible');
+    }
+  } else {
+    input.classList.remove('valid-field');
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   STEP NAVIGATION
+════════════════════════════════════════════════════════ */
+let currentStep = 1;
+const TOTAL_STEPS = 5;
+const stepDone = [false,false,false,false,false];
+
+function goStep(n) {
+  // Block clicking ahead on the step bar if Step 1 is not yet complete
+  if (n > 1 && !stepDone[0]) {
+    validateStep1();   // highlight what's missing
+    return;
+  }
+  // Block skipping ahead beyond the furthest completed step
+  const maxReachable = stepDone.lastIndexOf(true) + 2;  // one beyond last done
+  if (n > maxReachable) return;
+
+  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('step'+n).classList.add('active');
+  document.querySelectorAll('.step-item').forEach((el,i) => {
+    el.classList.remove('active','locked');
+    if (i+1 === n)       el.classList.add('active');
+    else if (stepDone[i]) el.classList.add('done');
+    else if (i+1 > maxReachable) el.classList.add('locked');
+  });
+  document.getElementById('btn-back').style.display = n > 1 ? '' : 'none';
+  document.getElementById('btn-next').textContent = n === TOTAL_STEPS ? '✓ Done' : 'Next →';
+  currentStep = n;
+  if (n === 5) buildReport();
+  window.scrollTo(0, 0);
+}
+
+function nextStep() {
+  // Gate: Step 1 requires valid fields before proceeding
+  if (currentStep === 1) {
+    if (!validateStep1()) return;
+    saveStudentInfo();
+    stepDone[0] = true;
+  }
+  if (currentStep === 2) { stepDone[1] = true; }
+  if (currentStep === 3) { stepDone[2] = true; }
+  if (currentStep === 4) { saveNotebook(); stepDone[3] = true; }
+
+  // On the final step, Done → show completion flash then go home
+  if (currentStep === TOTAL_STEPS) {
+    stepDone[4] = true;
+    saveAll();
+    showCompletionAndRedirect();
+    return;
+  }
+  goStep(currentStep + 1);
+}
+
+function showCompletionAndRedirect() {
+  // Build a fullscreen overlay, fade it in, then redirect
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed; inset: 0; z-index: 999999;
+    background: #0f0f0f;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 20px;
+    opacity: 0; transition: opacity 0.4s ease;
+  `;
+  overlay.innerHTML = `
+    <div style="font-size:56px;animation:popIn 0.4s cubic-bezier(.175,.885,.32,1.275) 0.3s both;">✅</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:#e8e8e8;text-align:center;">
+      Experiment Complete
+    </div>
+    <div style="font-size:14px;color:#888;text-align:center;max-width:320px;line-height:1.7;">
+      Your lab report has been saved.<br>Returning to home page…
+    </div>
+    <div style="width:200px;height:3px;background:#2c2c2c;border-radius:2px;margin-top:8px;overflow:hidden;">
+      <div id="prog-bar" style="height:100%;width:0%;background:#4ade80;border-radius:2px;transition:width 2s linear;"></div>
+    </div>
+    <style>
+      @keyframes popIn {
+        from { transform: scale(0.5); opacity: 0; }
+        to   { transform: scale(1);   opacity: 1; }
+      }
+    </style>
+  `;
+  document.body.appendChild(overlay);
+
+  // Fade in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      overlay.style.opacity = '1';
+      // Start progress bar after a tick
+      setTimeout(() => {
+        document.getElementById('prog-bar').style.width = '100%';
+      }, 50);
+    });
+  });
+
+  // Redirect after 2.2 seconds
+  setTimeout(() => { window.location.href = 'index.html'; }, 2200);
+}
+
+function prevStep() { if (currentStep > 1) goStep(currentStep - 1); }
+
+/* ════════════════════════════════════════════════════════
+   AUTO-SAVE (localStorage)
+════════════════════════════════════════════════════════ */
+function saveAll() {
+  const data = {
+    name:    document.getElementById('s-name').value,
+    reg:     document.getElementById('s-reg').value,
+    dept:    document.getElementById('s-dept').value,
+    date:    document.getElementById('s-date').value,
+    title:   document.getElementById('s-title').value,
+    batch:   document.getElementById('s-batch').value,
+    aim:     document.getElementById('nb-aim').value,
+    apparatus: document.getElementById('nb-apparatus').value,
+    theory:  document.getElementById('nb-theory').value,
+    obs:     document.getElementById('nb-obs').value,
+    calc:    document.getElementById('nb-calc').value,
+    conclusion: document.getElementById('nb-conclusion').value,
+    readings: readings
+  };
+  localStorage.setItem('adc-lab', JSON.stringify(data));
+  document.getElementById('save-label').textContent = 'Saved ' + new Date().toLocaleTimeString();
+}
+function loadSaved() {
+  const raw = localStorage.getItem('adc-lab');
+  if (!raw) return;
+  try {
+    const d = JSON.parse(raw);
+    if (d.name)    document.getElementById('s-name').value    = d.name;
+    if (d.reg)     document.getElementById('s-reg').value     = d.reg;
+    if (d.dept)    document.getElementById('s-dept').value    = d.dept;
+    if (d.date)    document.getElementById('s-date').value    = d.date;
+    if (d.title)   document.getElementById('s-title').value   = d.title;
+    if (d.batch)   document.getElementById('s-batch').value   = d.batch;
+    if (d.aim)     document.getElementById('nb-aim').value    = d.aim;
+    if (d.apparatus) document.getElementById('nb-apparatus').value = d.apparatus;
+    if (d.theory)  document.getElementById('nb-theory').value = d.theory;
+    if (d.obs)     document.getElementById('nb-obs').value    = d.obs;
+    if (d.calc)    document.getElementById('nb-calc').value   = d.calc;
+    if (d.conclusion) document.getElementById('nb-conclusion').value = d.conclusion;
+    if (d.readings) { readings = d.readings; renderReadingsTable(); }
+    // Re-apply green borders for any fields already filled from saved data
+    REQUIRED_FIELDS.forEach(f => {
+      if (document.getElementById(f.id).value.trim()) {
+        document.getElementById(f.id).classList.add('valid-field');
+      }
+    });
+  } catch(e) {}
+}
+function saveStudentInfo() { saveAll(); }
+function saveNotebook()    { saveAll(); }
+setInterval(saveAll, 10000); // auto-save every 10s
+
+/* ════════════════════════════════════════════════════════
+   SIGNAL SOURCE
+════════════════════════════════════════════════════════ */
+let signalMode = 'mic';
+let generatedSignal = null;
+let csvSignal = null;
+let recordedSignal = null;
+let genWave = 'sine';
+let genPreviewChart = null;
+
+function setSignalMode(m) {
+  signalMode = m;
+  ['mic','gen','csv'].forEach(k => {
+    document.getElementById('stab-'+k).classList.toggle('active', k===m);
+    document.getElementById('sig-'+k).classList.toggle('hidden', k!==m);
+  });
+  updateSignalReadyMsg();
+}
+
+function updateSignalReadyMsg() {
+  const el = document.getElementById('sig-ready-msg');
+  const txt = document.getElementById('sig-ready-text');
+  let ready = false, msg = '';
+  if (signalMode === 'mic' && recordedSignal) { ready = true; msg = `✓ Recorded audio ready (${recordedSignal.length} samples)`; }
+  else if (signalMode === 'gen') { ready = true; msg = '✓ Generator signal ready — proceed to experiments'; }
+  else if (signalMode === 'csv' && csvSignal) { ready = true; msg = `✓ CSV data ready (${csvSignal.length} samples)`; }
+  else if (signalMode === 'mic') { msg = 'Record audio using the microphone above, then continue.'; }
+  else if (signalMode === 'csv') { msg = 'Upload a CSV file to use as the input signal.'; }
+  el.className = 'alert ' + (ready ? 'alert-success' : 'alert-info');
+  txt.textContent = msg || 'Choose a signal source above.';
+}
+
+/* ── Generator ── */
+function setGenWave(w) {
+  genWave = w;
+  ['sine','square','saw','chirp'].forEach(k => document.getElementById('gtab-'+k).classList.toggle('active', k===w||k===w));
+  // fix: match IDs
+  document.getElementById('gtab-sine').classList.toggle('active', w==='sine');
+  document.getElementById('gtab-square').classList.toggle('active', w==='square');
+  document.getElementById('gtab-saw').classList.toggle('active', w==='sawtooth');
+  document.getElementById('gtab-chirp').classList.toggle('active', w==='chirp');
+  updateGen();
+}
+function updateGen() {
+  const freq = +document.getElementById('gen-freq').value;
+  const amp  = +document.getElementById('gen-amp').value / 100;
+  document.getElementById('gen-freq-val').textContent = freq + ' Hz';
+  document.getElementById('gen-amp-val').textContent  = Math.round(amp*100) + '%';
+  const N = 250;
+  generatedSignal = Array.from({length:N}, (_,i) => {
+    const t = i/N;
+    let v;
+    if (genWave === 'sine')     v = Math.sin(2*Math.PI*freq*t);
+    else if (genWave === 'square')   v = Math.sin(2*Math.PI*freq*t) >= 0 ? 0.9 : -0.9;
+    else if (genWave === 'sawtooth') v = 2*((freq*t)%1)-1;
+    else                              v = Math.sin(2*Math.PI*(freq + freq*t)*t); // chirp
+    return v * amp;
+  });
+  drawGenPreview();
+  simUpdate();
+}
+function drawGenPreview() {
+  if (!generatedSignal) return;
+  const canvas = document.getElementById('gen-preview');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth; canvas.height = 100;
+  ctx.fillStyle = '#1f1f1f'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = '#5b9cf6'; ctx.lineWidth = 1.5; ctx.beginPath();
+  generatedSignal.forEach((v,i) => {
+    const x = i/generatedSignal.length * canvas.width;
+    const y = (1 - (v+1)/2) * canvas.height;
+    i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+}
+
+/* ── CSV Upload ── */
+function handleCSVDrop(e) {
+  e.preventDefault();
+  document.getElementById('csv-drop').classList.remove('dragover');
+  if (e.dataTransfer.files[0]) handleCSVFile(e.dataTransfer.files[0]);
+}
+function handleCSVFile(file) {
+  const r = new FileReader();
+  r.onload = e => {
+    const lines = e.target.result.trim().split(/\r?\n/).filter(l=>l.trim());
+    const vals = [];
+    lines.forEach(l => { const p=l.split(/[,;\t]/); const n=parseFloat(p.length>1?p[1]:p[0]); if(!isNaN(n)) vals.push(n); });
+    if (vals.length < 4) { alert('Need at least 4 numeric values.'); return; }
+    const mn=Math.min(...vals), mx=Math.max(...vals), rng=mx-mn||1;
+    csvSignal = vals.map(v => ((v-mn)/rng)*2-1);
+    document.getElementById('csv-ok-text').textContent = `✓ ${csvSignal.length} samples loaded from ${file.name}`;
+    document.getElementById('csv-ok').classList.remove('hidden');
+    updateSignalReadyMsg(); simUpdate();
+  };
+  r.readAsText(file);
+}
+function clearCSVSig() {
+  csvSignal = null;
+  document.getElementById('csv-ok').classList.add('hidden');
+  updateSignalReadyMsg();
+}
+
+/* ── Microphone ── */
+let mediaRecorder = null, audioChunks = [], micStream = null;
+let audioCtx = null, micAnalyser = null, micAnimFrame = null;
+let isRecording = false;
+
+function toggleRecording() {
+  if (!isRecording) startRecording(); else stopRecording();
+}
+async function startRecording() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micAnalyser = audioCtx.createAnalyser();
+    micAnalyser.fftSize = 2048;
+    const src = audioCtx.createMediaStreamSource(micStream);
+    src.connect(micAnalyser);
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(micStream);
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.onstop = processRecording;
+    mediaRecorder.start();
+    isRecording = true;
+    document.getElementById('rec-btn').className = 'rec-btn recording';
+    document.getElementById('rec-btn').textContent = '⏹';
+    document.getElementById('rec-label').textContent = 'Recording...';
+    drawMicWaveform();
+    const dur = +document.getElementById('rec-dur').value * 1000;
+    setTimeout(() => { if (isRecording) stopRecording(); }, dur);
+  } catch(err) {
+    alert('Microphone access denied or not available.\n\nTip: This requires HTTPS. Use the hosted GitHub Pages URL, not a local file.');
+  }
+}
+function stopRecording() {
+  if (!isRecording) return;
+  isRecording = false;
+  mediaRecorder.stop();
+  micStream.getTracks().forEach(t => t.stop());
+  cancelAnimationFrame(micAnimFrame);
+  document.getElementById('rec-btn').className = 'rec-btn done';
+  document.getElementById('rec-btn').textContent = '✓';
+  document.getElementById('rec-label').textContent = 'Processing...';
+}
+async function processRecording() {
+  const blob = new Blob(audioChunks, { type: 'audio/webm' });
+  const arrayBuffer = await blob.arrayBuffer();
+  try {
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    const raw = audioBuffer.getChannelData(0);
+    const step = Math.max(1, Math.floor(raw.length / 1000));
+    let samples = Array.from({length: Math.min(1000, Math.floor(raw.length/step))}, (_,i) => raw[i*step]);
+    const maxAbs = Math.max(...samples.map(Math.abs)) || 1;
+    recordedSignal = samples.map(v => v / maxAbs);
+    document.getElementById('rec-label').textContent = `✓ ${recordedSignal.length} samples captured`;
+    document.getElementById('rec-status-text').textContent = `Recording ready — ${recordedSignal.length} samples captured`;
+    document.getElementById('rec-status').classList.remove('hidden');
+    updateSignalReadyMsg(); simUpdate();
+  } catch(e) {
+    document.getElementById('rec-label').textContent = 'Error processing audio';
+  }
+}
+function drawMicWaveform() {
+  const canvas = document.getElementById('mic-canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth; canvas.height = 80;
+  function draw() {
+    micAnimFrame = requestAnimationFrame(draw);
+    const buf = new Uint8Array(micAnalyser.frequencyBinCount);
+    micAnalyser.getByteTimeDomainData(buf);
+    ctx.fillStyle = '#1f1f1f'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle = '#f87171'; ctx.lineWidth = 1.5; ctx.beginPath();
+    const sw = canvas.width / buf.length;
+    buf.forEach((v,i) => {
+      const x = i*sw, y = (v/128.0) * canvas.height/2;
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  }
+  draw();
+}
+
+/* ════════════════════════════════════════════════════════
+   ADC SIMULATOR CORE 
+════════════════════════════════════════════════════════ */
+let currentBits = 4;
+const levelPlugin = {
+  id: 'lvl',
+  afterDraw(chart) {
+    if (currentBits > 7) return;
+    const {ctx,chartArea:{left,right},scales:{y}} = chart;
+    const step = 2/Math.pow(2,currentBits);
+    ctx.save(); ctx.strokeStyle='rgba(255,101,0,0.18)'; ctx.lineWidth=0.8; ctx.setLineDash([3,6]);
+    for (let i=0; i<=Math.pow(2,currentBits); i++) {
+      const val = -1+i*step;
+      if (val<-1.42||val>1.42) continue;
+      const yPx = y.getPixelForValue(val);
+      ctx.beginPath(); ctx.moveTo(left,yPx); ctx.lineTo(right,yPx); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+function getActiveSignal(N, freq) {
+  if (signalMode === 'mic' && recordedSignal) {
+    return Array.from({length:N},(_,i)=>{const idx=(i/N)*(recordedSignal.length-1),lo=Math.floor(idx),hi=Math.min(lo+1,recordedSignal.length-1);return recordedSignal[lo]+(recordedSignal[hi]-recordedSignal[lo])*(idx-lo);});
+  }
+  if (signalMode === 'csv' && csvSignal) {
+    return Array.from({length:N},(_,i)=>{const idx=(i/N)*(csvSignal.length-1),lo=Math.floor(idx),hi=Math.min(lo+1,csvSignal.length-1);return csvSignal[lo]+(csvSignal[hi]-csvSignal[lo])*(idx-lo);});
+  }
+  if (signalMode === 'gen' && generatedSignal) {
+    return Array.from({length:N},(_,i)=>{const idx=(i/N)*(generatedSignal.length-1),lo=Math.floor(idx),hi=Math.min(lo+1,generatedSignal.length-1);return generatedSignal[lo]+(generatedSignal[hi]-generatedSignal[lo])*(idx-lo);});
+  }
+  // default sine
+  return Array.from({length:N},(_,i)=>Math.sin(2*Math.PI*freq*i/N));
+}
+
+function buildSimData(bits, osExp, noisePct) {
+  const N=250, osRate=Math.pow(2,osExp), step=2/Math.pow(2,bits), noiseAmp=(noisePct/100)*0.3;
+  const orig = getActiveSignal(N, 2);
+  const noisy = orig.map(v=>v+(Math.random()-0.5)*2*noiseAmp);
+  let q;
+  if (osRate===1) {
+    q = noisy.map(v=>Math.round(Math.max(-1,Math.min(1,v))/step)*step);
+  } else {
+    const sN=N*osRate, ss=Array.from({length:sN},(_,i)=>{
+      const idx=(i/sN)*(orig.length-1),lo=Math.floor(idx),hi=Math.min(lo+1,orig.length-1);
+      return orig[lo]+(orig[hi]-orig[lo])*(idx-lo)+(Math.random()-0.5)*2*noiseAmp;
+    });
+    const sq=ss.map(v=>Math.round(Math.max(-1,Math.min(1,v))/step)*step);
+    q=[]; for(let i=0;i<N;i++){let s=0;for(let j=0;j<osRate;j++)s+=sq[i*osRate+j];q.push(s/osRate);}
+  }
+  const errors=orig.map((v,i)=>q[i]-v);
+  const rms=Math.sqrt(errors.reduce((s,e)=>s+e*e,0)/errors.length);
+  const snr=6.02*bits+1.76+10*Math.log10(osRate);
+  return {original:orig,quantized:q,errors,levels:Math.pow(2,bits),snr,enob:bits+osExp/2,rms};
+}
+
+let waveChart, errorChart, snrChart;
+
+function simUpdate() {
+  if (!waveChart) return;
+  const bits=+document.getElementById('bits').value,
+        osExp=+document.getElementById('osRate').value,
+        noise=+document.getElementById('noiseFloor').value,
+        osRate=Math.pow(2,osExp);
+  currentBits=bits;
+  document.getElementById('bits-val').textContent=bits+'-bit';
+  document.getElementById('os-val').textContent=osRate+'×';
+  document.getElementById('noise-val').textContent=noise+'%';
+  updateBitMeter(bits);
+  const d=buildSimData(bits,osExp,noise);
+  document.getElementById('stat-levels').textContent=d.levels.toLocaleString();
+  document.getElementById('stat-snr').textContent=d.snr.toFixed(1);
+  document.getElementById('stat-enob').textContent=d.enob.toFixed(1);
+  document.getElementById('rms-badge').textContent='RMS: '+d.rms.toFixed(4);
+  const qi=qualityInfo(d.snr);
+  const badge=document.getElementById('q-badge');
+  badge.textContent=qi.label; badge.className='badge';
+  badge.style.cssText=`background:${qi.col}1a;color:${qi.col};border:1px solid ${qi.col}44;font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;`;
+  document.getElementById('snr-fill').style.width=Math.min(100,Math.max(0,(d.snr-20)/80*100))+'%';
+  document.getElementById('snr-fill').style.background=qi.col;
+  const fa=Math.max(0.10,0.45-(bits-2)*0.025);
+  waveChart.data.datasets[2].fill={target:0,above:`rgba(249,115,22,${fa})`,below:`rgba(249,115,22,${fa})`};
+  const L=Array.from({length:d.original.length},(_,i)=>i);
+  waveChart.data.labels=L; waveChart.data.datasets[0].data=d.original; waveChart.data.datasets[1].data=d.quantized; waveChart.data.datasets[2].data=d.quantized; waveChart.update('none');
+  errorChart.data.labels=L; errorChart.data.datasets[0].data=d.errors; errorChart.update('none');
+  const curve=Array.from({length:17},(_,b)=>b===0?null:parseFloat((6.02*b+1.76+10*Math.log10(osRate)).toFixed(1)));
+  snrChart.data.datasets[0].data=curve;
+  snrChart.data.datasets[1].data=Array.from({length:17},(_,i)=>i===bits?parseFloat(d.snr.toFixed(1)):null);
+  snrChart.update('none');
+}
+
+function qualityInfo(snr) {
+  if (snr<30) return {label:'Poor',     col:'#ef4444'};
+  if (snr<50) return {label:'Fair',     col:'#f97316'};
+  if (snr<70) return {label:'Good',     col:'#eab308'};
+  if (snr<90) return {label:'CD Quality',col:'#5b9cf6'};
+  return             {label:'Studio',   col:'#4ade80'};
+}
+
+function initBitMeter() {
+  const m=document.getElementById('bit-meter');
+  for(let i=0;i<16;i++){const b=document.createElement('div');b.className='bit-bar';b.id='bb-'+i;m.appendChild(b);}
+}
+function updateBitMeter(b){for(let i=0;i<16;i++)document.getElementById('bb-'+i).classList.toggle('on',i<b);}
+
+/* ════════════════════════════════════════════════════════
+   CHART HELPERS — lookup by short id
+════════════════════════════════════════════════════════ */
+function chartOf(id) {
+  return id==='wave' ? waveChart : id==='error' ? errorChart : snrChart;
+}
+function canvasOf(id) {
+  return id==='wave' ? 'waveChart' : id==='error' ? 'errorChart' : 'snrChart';
+}
+
+/* ════════════════════════════════════════════════════════
+   ZOOM  (chartjs-plugin-zoom)
+   ─────────────────────────────────────────────────────
+   doZoom(id, factor):  >1 = zoom in, <1 = zoom out.
+     Calls chart.zoom(factor) which the plugin provides.
+     Waveform + error: x-axis only (preserve y reference).
+     SNR: x+y so students can isolate a bit-depth range.
+   doReset(id): chart.resetZoom() restores full range.
+   updateZoomBar(): shows the current sample window below
+     the chart and reveals the "reset zoom" link.
+════════════════════════════════════════════════════════ */
+function doZoom(id, factor) {
+  const c = chartOf(id);
+  if (!c) return;
+  c.zoom(factor);
+  updateZoomBar(id);
+}
+
+function doReset(id) {
+  const c = chartOf(id);
+  if (!c) return;
+  c.resetZoom();
+  document.getElementById('zbar-'+id).classList.remove('on');
+}
+
+function updateZoomBar(id) {
+  const c = chartOf(id);
+  const xScale = c.scales.x;
+  if (!xScale) return;
+  const mn = Math.round(xScale.min), mx = Math.round(xScale.max);
+  const total = (c.data.labels || []).length || 16;
+  const pct = Math.round(((mx - mn) / total) * 100);
+  document.getElementById('zinfo-'+id).textContent =
+    `Showing samples ${mn}–${mx} · ${pct}% of range`;
+  document.getElementById('zbar-'+id).classList.add('on');
+}
+
+/* ════════════════════════════════════════════════════════
+   MARKERS
+   ─────────────────────────────────────────────────────
+   toggleMarker(id): activates "placement mode" for that
+     chart — changes cursor to crosshair, highlights button.
+   onChartClick: when placement mode is active, converts
+     the pixel click to a data-index using
+     chart.scales.x.getValueForPixel(), stores the marker,
+     re-renders the list beneath the chart, and auto-exits
+     placement mode so one click = one marker.
+   renderMarkers(id): rebuilds the <div> list of markers
+     below the chart. Each row shows a color swatch, an
+     editable label field, x/y coordinates, and a delete ✕.
+   markerPlugin: Chart.js afterDraw plugin that draws a
+     vertical dashed line + diamond + label for every marker.
+     Color-cycles through 6 distinct hues.
+════════════════════════════════════════════════════════ */
+const MK_COLORS = ['#fbbf24','#a78bfa','#34d399','#f472b6','#60a5fa','#fb923c'];
+const mkData    = { wave:[], error:[], snr:[] };
+const mkMode    = { wave:false, error:false, snr:false };
+
+const markerPlugin = {
+  id: 'mPlugin',
+  afterDraw(chart) {
+    const id = chart.canvas.id==='waveChart' ? 'wave'
+             : chart.canvas.id==='errorChart' ? 'error' : 'snr';
+    const mks = mkData[id];
+    if (!mks.length) return;
+    const { ctx, chartArea:{top,bottom,left,right}, scales:{x,y} } = chart;
+    ctx.save();
+    mks.forEach(m => {
+      const px = x.getPixelForValue(m.xi);
+      if (px < left || px > right) return;
+      // dashed vertical line
+      ctx.strokeStyle = m.col; ctx.lineWidth = 1.5;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(px,top); ctx.lineTo(px,bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      // diamond
+      ctx.fillStyle = m.col;
+      ctx.beginPath();
+      ctx.moveTo(px,     top+5);
+      ctx.lineTo(px+5,   top+10);
+      ctx.lineTo(px,     top+15);
+      ctx.lineTo(px-5,   top+10);
+      ctx.closePath(); ctx.fill();
+      // label (shifted right so it doesn't overlap the diamond)
+      ctx.fillStyle = m.col;
+      ctx.font = '10px JetBrains Mono, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(m.label, px+8, top+13);
+    });
+    ctx.restore();
+  }
+};
+
+function toggleMarker(id) {
+  mkMode[id] = !mkMode[id];
+  const btn = document.getElementById('mk-btn-'+id);
+  const cv  = document.getElementById(canvasOf(id));
+  if (mkMode[id]) {
+    btn.classList.add('mark-active');
+    btn.setAttribute('data-tip','Click on chart to place marker');
+    cv.style.cursor = 'crosshair';
+  } else {
+    btn.classList.remove('mark-active');
+    btn.setAttribute('data-tip','Place marker');
+    cv.style.cursor = '';
+  }
+}
+
+function onChartClick(e, chart, id) {
+  if (!mkMode[id]) return;
+  const rect = chart.canvas.getBoundingClientRect();
+  const xi   = Math.round(chart.scales.x.getValueForPixel(e.clientX - rect.left));
+  const ds0  = chart.data.datasets[0];
+  const yi   = ds0 && ds0.data[xi] !== undefined ? +ds0.data[xi].toFixed(4) : null;
+  const col  = MK_COLORS[mkData[id].length % MK_COLORS.length];
+  mkData[id].push({ xi, yi, col, label:'M'+(mkData[id].length+1) });
+  chart.update('none');
+  renderMarkers(id);
+  toggleMarker(id); // auto-exit placement mode
+}
+
+function renderMarkers(id) {
+  const panel = document.getElementById('mpanel-'+id);
+  const mks   = mkData[id];
+  if (!mks.length) { panel.classList.remove('on'); return; }
+  panel.classList.add('on');
+  panel.innerHTML = mks.map((m,i) => `
+    <div class="mk-row">
+      <span class="mk-dot" style="background:${m.col}"></span>
+      <input class="mk-name" value="${m.label}"
+        onchange="mkData['${id}'][${i}].label=this.value;chartOf('${id}').update('none');"
+        title="Rename marker">
+      <span class="mk-coord">x=${m.xi}${m.yi!==null?' y='+m.yi:''}</span>
+      <button class="mk-del" onclick="mkData['${id}'].splice(${i},1);chartOf('${id}').update('none');renderMarkers('${id}')">✕</button>
+    </div>
+  `).join('');
+}
+
+/* ════════════════════════════════════════════════════════
+   DOWNLOAD CHART AS PNG
+   ─────────────────────────────────────────────────────
+   Chart.js uses a transparent canvas. dlChart() draws it
+   onto an off-screen canvas with a solid dark fill first,
+   then triggers a .png download via a blob URL. Markers
+   and current zoom state are captured exactly as-is.
+════════════════════════════════════════════════════════ */
+function dlChart(canvasId, name) {
+  const src = document.getElementById(canvasId);
+  const off = document.createElement('canvas');
+  off.width = src.width; off.height = src.height;
+  const ctx = off.getContext('2d');
+  ctx.fillStyle = '#171717';
+  ctx.fillRect(0,0,off.width,off.height);
+  ctx.drawImage(src,0,0);
+  off.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `adc_${name}_${new Date().toISOString().slice(0,10)}.png`;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  },'image/png');
+}
+
+/* ════════════════════════════════════════════════════════
+   CHART INIT
+════════════════════════════════════════════════════════ */
+function initCharts() {
+  const grid='rgba(255,255,255,0.05)', tick='#555';
+
+  // Shared zoom config — x-axis pan+wheel for waveform & error
+  const zX = {
+    pan:  { enabled:true, mode:'x' },
+    zoom: { wheel:{enabled:true}, pinch:{enabled:true}, mode:'x',
+            onZoom:({chart})=>updateZoomBar(chart.canvas.id==='waveChart'?'wave':'error'),
+            onPan: ({chart})=>updateZoomBar(chart.canvas.id==='waveChart'?'wave':'error') }
+  };
+  // SNR chart: xy zoom so students can isolate a region
+  const zXY = {
+    pan:  { enabled:true, mode:'xy' },
+    zoom: { wheel:{enabled:true}, pinch:{enabled:true}, mode:'xy',
+            onZoom:({chart})=>updateZoomBar('snr'),
+            onPan: ({chart})=>updateZoomBar('snr') }
+  };
+
+  const tt = {backgroundColor:'#232323',borderColor:'rgba(255,255,255,0.15)',borderWidth:1,titleColor:'#e8e8e8',bodyColor:'#888',padding:10,cornerRadius:8};
+  const base = {
+    responsive:true, maintainAspectRatio:false, animation:false,
+    plugins:{ legend:{display:false}, tooltip:tt, zoom:zX },
+    scales:{ x:{display:false}, y:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10},maxTicksLimit:5},grid:{color:grid},border:{display:false}} }
+  };
+
+  waveChart = new Chart(document.getElementById('waveChart'), {
+    type:'line',
+    data:{ labels:[], datasets:[
+      {label:'Original', data:[], borderColor:'#5b9cf6', borderWidth:1.5, pointRadius:0, tension:0.4, fill:false},
+      {label:'Quantized',data:[], borderColor:'#ff6500', borderWidth:3,   pointRadius:0, tension:0, stepped:true, fill:false},
+      {label:'_fill',    data:[], borderColor:'transparent', borderWidth:0, pointRadius:0, tension:0, stepped:true,
+        fill:{target:0,above:'rgba(249,115,22,0.3)',below:'rgba(249,115,22,0.3)'}}
+    ]},
+    options:{...base, scales:{...base.scales,y:{...base.scales.y,min:-1.4,max:1.4}}},
+    plugins:[levelPlugin, markerPlugin]
+  });
+
+  errorChart = new Chart(document.getElementById('errorChart'), {
+    type:'line',
+    data:{ labels:[], datasets:[{label:'Error',data:[],borderColor:'#f87171',borderWidth:1,pointRadius:0,fill:true,backgroundColor:'rgba(248,113,113,0.08)'}]},
+    options:{...base},
+    plugins:[markerPlugin]
+  });
+
+  snrChart = new Chart(document.getElementById('snrChart'), {
+    type:'line',
+    data:{ labels:Array.from({length:17},(_,i)=>i), datasets:[
+      {label:'SNR',    data:[], borderColor:'#4ade80', borderWidth:2, pointRadius:0, tension:0.3, fill:true, backgroundColor:'rgba(74,222,128,0.04)'},
+      {label:'Current',data:[], backgroundColor:'#f97316', borderColor:'#f97316', pointRadius:8, pointHoverRadius:10, type:'scatter', showLine:false}
+    ]},
+    options:{...base,
+      plugins:{...base.plugins, zoom:zXY},
+      scales:{
+        x:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10}},grid:{color:grid},border:{display:false},title:{display:true,text:'bits',color:tick,font:{family:'JetBrains Mono',size:10}}},
+        y:{ticks:{color:tick,font:{family:'JetBrains Mono',size:10},callback:v=>v+' dB',maxTicksLimit:5},grid:{color:grid},border:{display:false}}
+      }
+    },
+    plugins:[markerPlugin]
+  });
+
+  // Bind click handlers for marker placement
+  document.getElementById('waveChart') .addEventListener('click', e => onChartClick(e, waveChart,  'wave'));
+  document.getElementById('errorChart').addEventListener('click', e => onChartClick(e, errorChart, 'error'));
+  document.getElementById('snrChart')  .addEventListener('click', e => onChartClick(e, snrChart,   'snr'));
+}
+
+/* ════════════════════════════════════════════════════════
+   READINGS TABLE
+════════════════════════════════════════════════════════ */
+let readings = [];
+
+function recordReading() {
+  const bits=+document.getElementById('bits').value,
+        osExp=+document.getElementById('osRate').value,
+        noise=+document.getElementById('noiseFloor').value;
+  const d = buildSimData(bits, osExp, noise);
+  const entry = {
+    bits, osRate: Math.pow(2,osExp), noise, levels: d.levels,
+    snr: +d.snr.toFixed(2), enob: +d.enob.toFixed(2), rms: +d.rms.toFixed(5),
+    notes: '', ts: new Date().toLocaleTimeString()
+  };
+  readings.push(entry);
+  renderReadingsTable();
+  saveAll();
+  // flash the table
+  const btn = event.target;
+  btn.textContent = '✓ Recorded!';
+  setTimeout(() => btn.textContent = '📋 Record This Reading', 1200);
+}
+
+function renderReadingsTable() {
+  const tbody = document.getElementById('readings-body');
+  if (readings.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-state">No readings yet — adjust the sliders and click "Record This Reading"</td></tr>';
+    return;
+  }
+  tbody.innerHTML = readings.map((r,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td><span class="badge badge-blue">${r.bits}-bit</span></td>
+      <td>${r.osRate}×</td>
+      <td>${r.noise}%</td>
+      <td>${r.levels.toLocaleString()}</td>
+      <td><strong style="color:var(--text)">${r.snr}</strong></td>
+      <td>${r.enob}</td>
+      <td style="font-family:var(--mono);font-size:11px;">${r.rms}</td>
+      <td><input value="${r.notes}" onchange="readings[${i}].notes=this.value;saveAll()" style="background:transparent;border:none;color:var(--muted3);font-size:12px;width:120px;outline:none;" placeholder="add note..."></td>
+      <td><button onclick="readings.splice(${i},1);renderReadingsTable();saveAll();" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;">✕</button></td>
+    </tr>
+  `).join('');
+}
+
+function clearReadings() {
+  if (readings.length && !confirm('Clear all readings?')) return;
+  readings = []; renderReadingsTable(); saveAll();
+}
+
+function exportReadingsCSV() {
+  if (!readings.length) { alert('No readings to export.'); return; }
+  const header = 'Reading,Bits,Oversampling,NoiseFloor,Levels,SNR_dB,ENOB,RMS_Error,Notes\n';
+  const rows = readings.map((r,i) => `${i+1},${r.bits},${r.osRate}×,${r.noise}%,${r.levels},${r.snr},${r.enob},${r.rms},"${r.notes}"`).join('\n');
+  download('adc_readings.csv', header + rows);
+}
+
+/* ════════════════════════════════════════════════════════
+   REPORT BUILDER
+════════════════════════════════════════════════════════ */
+function buildReport() {
+  const name  = document.getElementById('s-name').value  || '—';
+  const reg   = document.getElementById('s-reg').value   || '—';
+  const dept  = document.getElementById('s-dept').value  || '—';
+  const date  = document.getElementById('s-date').value  || '—';
+  const title = document.getElementById('s-title').value || '—';
+  const batch = document.getElementById('s-batch').value || '—';
+  document.getElementById('report-meta').innerHTML = [
+    ['Student Name', name], ['Reg. No.', reg], ['Department', dept],
+    ['Date', date], ['Experiment', title], ['Section', batch]
+  ].map(([k,v]) => `<div class="report-meta"><div class="key">${k}</div><div class="val">${v}</div></div>`).join('');
+
+  // copy readings
+  const rb = document.getElementById('report-body');
+  if (readings.length) {
+    rb.innerHTML = readings.map((r,i) => `<tr><td>${i+1}</td><td>${r.bits}-bit</td><td>${r.osRate}×</td><td>${r.levels.toLocaleString()}</td><td>${r.snr}</td><td>${r.enob}</td><td>${r.rms}</td><td>${r.notes}</td></tr>`).join('');
+  } else {
+    rb.innerHTML = '<tr><td colspan="8" class="empty-state">No data recorded yet</td></tr>';
+  }
+
+  // notebook
+  document.getElementById('report-aim').textContent        = document.getElementById('nb-aim').value        || '—';
+  document.getElementById('report-theory').textContent     = document.getElementById('nb-theory').value     || '—';
+  document.getElementById('report-obs').textContent        = document.getElementById('nb-obs').value        || 'No observations recorded.';
+  document.getElementById('report-conclusion').textContent = document.getElementById('nb-conclusion').value || 'No conclusion recorded.';
+}
+
+function exportFullReport() {
+  const name  = document.getElementById('s-name').value  || '';
+  const date  = document.getElementById('s-date').value  || '';
+  let csv = `ADC Resolution & Noise Lab Report\n`;
+  csv += `Student: ${name}\nReg: ${document.getElementById('s-reg').value}\nDate: ${date}\n\n`;
+  csv += `AIM\n"${document.getElementById('nb-aim').value}"\n\n`;
+  csv += `THEORY\n"${document.getElementById('nb-theory').value}"\n\n`;
+  csv += `OBSERVATIONS\n"${document.getElementById('nb-obs').value}"\n\n`;
+  csv += `CONCLUSION\n"${document.getElementById('nb-conclusion').value}"\n\n`;
+  csv += `EXPERIMENTAL DATA\nReading,Bits,Oversampling,Levels,SNR_dB,ENOB,RMS_Error,Notes\n`;
+  readings.forEach((r,i) => csv += `${i+1},${r.bits},${r.osRate}×,${r.levels},${r.snr},${r.enob},${r.rms},"${r.notes}"\n`);
+  download(`ADC_Lab_Report_${name.replace(/ /g,'_')}.csv`, csv);
+}
+
+function download(filename, text) {
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(text);
+  a.download = filename; a.click();
+}
+
+/* ════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', () => {
+  // Set today's date
+  document.getElementById('s-date').valueAsDate = new Date();
+  // Init simulator
+  initBitMeter(); initCharts(); simUpdate();
+  // Load generator preview
+  setGenWave('sine'); updateGen();
+  // Load saved data
+  loadSaved();
+});
+</script>
+</body>
+</html>
