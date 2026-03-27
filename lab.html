@@ -338,7 +338,7 @@
         <div class="form-grid">
           <div class="form-group" id="fg-name">
             <label class="form-label">Full Name <span style="color:var(--red);">*</span></label>
-            <input class="form-input" id="s-name" type="text" placeholder="e.g. Joe Gibbs" oninput="liveValidate('s-name','fg-name')">
+            <input class="form-input" id="s-name" type="text" placeholder="e.g.Daksh Punia" oninput="liveValidate('s-name','fg-name')">
             <div class="field-err-msg">Full name is required</div>
           </div>
           <div class="form-group" id="fg-reg">
@@ -348,7 +348,7 @@
           </div>
           <div class="form-group" id="fg-dept">
             <label class="form-label">Department <span style="color:var(--red);">*</span></label>
-            <input class="form-input" id="s-dept" type="text" placeholder="e.g. Mechanical Engineering" oninput="liveValidate('s-dept','fg-dept')">
+            <input class="form-input" id="s-dept" type="text" placeholder="e.g. Quantumn Computing " oninput="liveValidate('s-dept','fg-dept')">
             <div class="field-err-msg">Department is required</div>
           </div>
           <div class="form-group" id="fg-date">
@@ -358,7 +358,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">Experiment Title</label>
-            <input class="form-input" id="s-title" type="text" value="ADC Resolution & Noise Simulator">
+            <input class="form-input" id="s-title" type="text" value="ADC Resolution, Noise & Oversampling Simulator">
           </div>
           <div class="form-group">
             <label class="form-label">Section </label>
@@ -400,7 +400,7 @@
       <div class="card-body">
         <div class="alert alert-warn" style="margin-bottom:16px;">
           <span>⚠️</span>
-          <span>Requires microphone permission. Works on HTTPS (the hosted site) — not on local file://</span>
+          <span>Requires microphone permission</span>
         </div>
         <canvas id="mic-canvas"></canvas>
         <div style="display:flex;align-items:center;gap:16px;margin-top:16px;justify-content:center;flex-wrap:wrap;">
@@ -411,7 +411,7 @@
           <div style="flex:1;min-width:200px;">
             <div style="font-size:12px;color:var(--muted2);margin-bottom:6px;">Recording duration</div>
             <div class="ctrl-row"><span style="font-size:12px;color:var(--muted2);">Max length</span><span class="ctrl-val" id="rec-dur-val">5 s</span></div>
-            <input type="range" id="rec-dur" min="2" max="10" value="5" step="1" oninput="document.getElementById('rec-dur-val').textContent=this.value+' s'">
+            <input type="range" id="rec-dur" min="2" max="20" value="5" step="1" oninput="document.getElementById('rec-dur-val').textContent=this.value+' s'">
           </div>
         </div>
         <div id="rec-status" class="alert alert-success hidden" style="margin-top:12px;">
@@ -902,12 +902,6 @@ Oversampling: Sampling M times faster and averaging. Each 4× oversampling adds 
   document.addEventListener('mouseout', e=>{if(e.target.closest('.tip[data-title]'))hide();});
 })();
 
-/* ── TOOLBAR MINI-TOOLTIP ENGINE ────────────────────────────────
-   Uses position:fixed so it is NEVER clipped by card overflow:hidden.
-   Reads data-tip attribute from .ct-btn elements.
-   Appears BELOW the button (into open space), not above (which
-   would clip into the card header background or outside the card).
-────────────────────────────────────────────────────────────────── */
 (function(){
   const tip = document.getElementById('ct-tip');
   let hT = null;
@@ -938,11 +932,6 @@ Oversampling: Sampling M times faster and averaging. Each 4× oversampling adds 
    STEP 1 VALIDATION
    ─────────────────────────────────────────────────────
    Required fields: name, reg, dept, date.
-   validateStep1() checks each, marks .field-error on
-   failing groups, shows the error banner, and returns
-   false so nextStep() blocks navigation.
-   liveValidate() clears error state as the user types,
-   giving instant positive feedback (green border).
 ════════════════════════════════════════════════════════ */
 const REQUIRED_FIELDS = [
   { id: 's-name', group: 'fg-name', label: 'Full Name' },
@@ -1468,13 +1457,6 @@ function canvasOf(id) {
 /* ════════════════════════════════════════════════════════
    ZOOM  (chartjs-plugin-zoom)
    ─────────────────────────────────────────────────────
-   doZoom(id, factor):  >1 = zoom in, <1 = zoom out.
-     Calls chart.zoom(factor) which the plugin provides.
-     Waveform + error: x-axis only (preserve y reference).
-     SNR: x+y so students can isolate a bit-depth range.
-   doReset(id): chart.resetZoom() restores full range.
-   updateZoomBar(): shows the current sample window below
-     the chart and reveals the "reset zoom" link.
 ════════════════════════════════════════════════════════ */
 function doZoom(id, factor) {
   const c = chartOf(id);
@@ -1504,13 +1486,6 @@ function updateZoomBar(id) {
 
 /* ════════════════════════════════════════════════════════
    MARKERS  (with wave→error sync)
-   ─────────────────────────────────────────────────────
-   When a marker is placed on the waveform chart, the same
-   x-position is automatically mirrored on the error chart.
-   This lets students correlate a specific sample's error
-   with the corresponding waveform position at a glance.
-   Synced markers are shown with a lighter alpha on the
-   error chart so students know they came from above.
 ════════════════════════════════════════════════════════ */
 const MK_COLORS = ['#fbbf24','#a78bfa','#34d399','#f472b6','#60a5fa','#fb923c'];
 const mkData    = { wave:[], error:[], snr:[], fft:[] };
@@ -1643,15 +1618,6 @@ function removeMk(id, i) {
 
 /* ════════════════════════════════════════════════════════
    TEXT ANNOTATIONS
-   ─────────────────────────────────────────────────────
-   startAnnot(id): activates annotation placement mode.
-     Changes cursor to crosshair; next click stores the
-     click position and shows a text-input dialog.
-   confirmAnnot(): takes the dialog text, stores the
-     annotation at the pending position, and redraws.
-   Annotations are drawn by the markerPlugin afterDraw()
-   as a yellow label with a dark background pill and a
-   small dashed tick line down to the x-position.
 ════════════════════════════════════════════════════════ */
 const textAnnotations = { wave:[], error:[], snr:[], fft:[] };
 let annotMode = { wave:false, error:false, snr:false, fft:false };
@@ -1706,13 +1672,6 @@ document.addEventListener('keydown', e => { if (e.key === 'Enter' && document.ge
 
 /* ════════════════════════════════════════════════════════
    COMPARISON MODE
-   ─────────────────────────────────────────────────────
-   toggleCompare(): takes a snapshot of the current
-     waveform (original + quantized) and stores it.
-     Adds two extra datasets to waveChart with purple
-     semi-transparent lines. The legend strip appears.
-   clearCompare(): removes snapshot datasets and hides
-     the legend strip.
 ════════════════════════════════════════════════════════ */
 let compareActive = false;
 
