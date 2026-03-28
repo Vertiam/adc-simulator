@@ -10,6 +10,14 @@
 
 🔗 **[https://vertiam.github.io/adc-simulator/](https://vertiam.github.io/adc-simulator/)**
 
+---
+
+## 📽️ Video Demo
+
+🔗 **[Click This Link to Watch the video demo!!](https://www.youtube.com/watch?v=S8LdKh43M4Y)**
+
+---
+
 | Page | URL | Description |
 |---|---|---|
 | 🏠 Landing Page | `/index.html` | Project overview, theory cards, experiment guide |
