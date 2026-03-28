@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qt π's — ADC Lab — Outro</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0a0a0a;
+  color: #e8e8e8;
+  font-family: 'DM Sans', sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── ANIMATED WAVEFORM BACKGROUND ── */
+.wave-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+.wave-bg canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0.18;
+}
+
+/* ── GRID OVERLAY ── */
+.grid {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* ── MAIN CONTENT ── */
+.content {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  animation: fadeUp 1.2s cubic-bezier(.22,1,.36,1) both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── HACKATHON TAG ── */
+.tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #555;
+  margin-bottom: 32px;
+  animation: fadeUp 1.2s 0.1s cubic-bezier(.22,1,.36,1) both;
+}
+
+/* ── TEAM NAME ── */
+.team {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(48px, 8vw, 96px);
+  font-weight: 700;
+  color: #e8e8e8;
+  letter-spacing: -3px;
+  line-height: 1;
+  margin-bottom: 8px;
+  animation: fadeUp 1.2s 0.15s cubic-bezier(.22,1,.36,1) both;
+}
+
+/* ── PROBLEM STATEMENT ── */
+.problem {
+  font-size: clamp(13px, 1.8vw, 17px);
+  color: #555;
+  font-weight: 400;
+  margin-bottom: 56px;
+  animation: fadeUp 1.2s 0.2s cubic-bezier(.22,1,.36,1) both;
+}
+
+/* ── DIVIDER ── */
+.div-line {
+  width: 1px;
+  height: 48px;
+  background: linear-gradient(to bottom, transparent, #333, transparent);
+  margin-bottom: 56px;
+  animation: fadeUp 1.2s 0.25s cubic-bezier(.22,1,.36,1) both;
+}
+
+/* ── URL BLOCK ── */
+.url-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 56px;
+  animation: fadeUp 1.2s 0.3s cubic-bezier(.22,1,.36,1) both;
+}
+.url-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #444;
+}
+.url {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(18px, 3vw, 32px);
+  font-weight: 500;
+  color: #e8e8e8;
+  letter-spacing: -0.5px;
+  position: relative;
+}
+/* animated underline on the URL */
+.url::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 1.5px;
+  background: #e8e8e8;
+  animation: underline 1.2s 1.2s cubic-bezier(.22,1,.36,1) forwards;
+}
+@keyframes underline {
+  to { width: 100%; }
+}
+
+/* ── MEMBERS ── */
+.members {
+  display: flex;
+  gap: clamp(20px, 4vw, 56px);
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  animation: fadeUp 1.2s 0.4s cubic-bezier(.22,1,.36,1) both;
+}
+.member {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.member-name {
+  font-size: clamp(12px, 1.4vw, 15px);
+  font-weight: 500;
+  color: #bbb;
+}
+.member-role {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #444;
+  letter-spacing: 0.5px;
+}
+.member-sep {
+  width: 1px;
+  height: 32px;
+  background: #222;
+}
+
+/* ── CORNER ACCENTS ── */
+.corner {
+  position: fixed;
+  width: 40px;
+  height: 40px;
+  z-index: 20;
+  opacity: 0;
+  animation: fadeIn 0.6s 1.6s ease forwards;
+}
+@keyframes fadeIn { to { opacity: 1; } }
+.corner.tl { top: 28px; left: 28px; border-top: 1px solid #2a2a2a; border-left: 1px solid #2a2a2a; }
+.corner.tr { top: 28px; right: 28px; border-top: 1px solid #2a2a2a; border-right: 1px solid #2a2a2a; }
+.corner.bl { bottom: 28px; left: 28px; border-bottom: 1px solid #2a2a2a; border-left: 1px solid #2a2a2a; }
+.corner.br { bottom: 28px; right: 28px; border-bottom: 1px solid #2a2a2a; border-right: 1px solid #2a2a2a; }
+
+/* ── BOTTOM BAR ── */
+.bottom-bar {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #333;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: fadeIn 0.6s 1.8s ease forwards;
+  white-space: nowrap;
+}
+
+/* ── SCAN LINE EFFECT ── */
+.scanline {
+  position: fixed;
+  top: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255,255,255,0.03);
+  z-index: 30;
+  animation: scan 6s linear infinite;
+}
+@keyframes scan {
+  from { top: -2px; }
+  to   { top: 100vh; }
+}
+</style>
+</head>
+<body>
+
+<!-- Animated waveform bg -->
+<div class="wave-bg"><canvas id="wc"></canvas></div>
+
+<!-- Subtle grid -->
+<div class="grid"></div>
+
+<!-- Corner brackets -->
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<!-- Scan line -->
+<div class="scanline"></div>
+
+<!-- Main content -->
+<div class="content">
+
+  <div class="tag">Quatumn Hackathon &nbsp;·&nbsp; Problem Statement #19</div>
+
+  <div class="team">Qt&thinsp;π's</div>
+  <div class="problem">ADC Resolution, Noise &amp; Oversampling Simulator</div>
+
+  <div class="div-line"></div>
+
+  <div class="url-block">
+    <span class="url-label">Live at</span>
+    <span class="url">vertiam.github.io/adc-simulator</span>
+  </div>
+
+  <div class="members">
+    <div class="member">
+      <div class="member-name">Swayam Viral Marfatia</div>
+      <div class="member-role">Team Leader</div>
+    </div>
+    <div class="member-sep"></div>
+    <div class="member">
+      <div class="member-name">Narayan Murthy</div>
+      <div class="member-role">Member</div>
+    </div>
+    <div class="member-sep"></div>
+    <div class="member">
+      <div class="member-name">Shirly Oviya</div>
+      <div class="member-role">Member</div>
+    </div>
+    <div class="member-sep"></div>
+    <div class="member">
+      <div class="member-name">Mithasha P Sishaj</div>
+      <div class="member-role">Member</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom bar -->
+<div class="bottom-bar">Mechanical Engineering &nbsp;·&nbsp; No installation &nbsp;·&nbsp; Open the browser, run the experiment</div>
+
+<script>
+/* ── ANIMATED ADC WAVEFORM BACKGROUND ──────────────────────────
+   Draws three layers:
+   1. Original smooth sine wave (blue)
+   2. Quantized staircase (orange)  — updates its bit depth slowly
+   3. Error signal at bottom (red, tiny)
+
+   The bit depth oscillates from 2→8 and back, making the
+   staircase visually coarsen and smooth — perfect visual
+   metaphor for the whole project.
+───────────────────────────────────────────────────────────────── */
+const cv = document.getElementById('wc');
+const ctx = cv.getContext('2d');
+let W, H, t = 0;
+
+function resize() {
+  W = cv.width  = window.innerWidth;
+  H = cv.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function quantize(v, bits) {
+  const levels = Math.pow(2, bits);
+  const step = 2 / levels;
+  return Math.round(Math.max(-1, Math.min(1, v)) / step) * step;
+}
+
+function draw() {
+  t += 0.008;
+  ctx.clearRect(0, 0, W, H);
+
+  const N = 300;
+  const freq = 2.5;
+  // bit depth oscillates 2→8 slowly
+  const bits = Math.round(2 + 3 * (Math.sin(t * 0.3) * 0.5 + 0.5) * 2);
+
+  const yCenter = H * 0.52;
+  const amp = H * 0.22;
+
+  // ── Original sine ──
+  ctx.beginPath();
+  ctx.strokeStyle = '#5b9cf6';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i <= N; i++) {
+    const x = (i / N) * W;
+    const v = Math.sin(2 * Math.PI * freq * (i / N) - t);
+    const y = yCenter - v * amp;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // ── Quantized staircase ──
+  ctx.beginPath();
+  ctx.strokeStyle = '#ff6500';
+  ctx.lineWidth = 2;
+  let prevQY = null;
+  for (let i = 0; i <= N; i++) {
+    const x = (i / N) * W;
+    const v = Math.sin(2 * Math.PI * freq * (i / N) - t);
+    const qv = quantize(v, bits);
+    const y = yCenter - qv * amp;
+    if (i === 0) { ctx.moveTo(x, y); }
+    else {
+      ctx.lineTo(x, prevQY);   // horizontal
+      ctx.lineTo(x, y);         // vertical jump
+    }
+    prevQY = y;
+  }
+  ctx.stroke();
+
+  // ── Error signal (bottom strip) ──
+  const errCenter = H * 0.84;
+  const errAmp = H * 0.04;
+  ctx.beginPath();
+  ctx.strokeStyle = '#f87171';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= N; i++) {
+    const x = (i / N) * W;
+    const v = Math.sin(2 * Math.PI * freq * (i / N) - t);
+    const err = quantize(v, bits) - v;
+    const y = errCenter - err * errAmp * 8;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // ── Quantization level lines ──
+  if (bits <= 5) {
+    const levels = Math.pow(2, bits);
+    const step = 2 / levels;
+    ctx.strokeStyle = 'rgba(255,101,0,0.12)';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([4, 8]);
+    for (let i = 0; i <= levels; i++) {
+      const v = -1 + i * step;
+      const y = yCenter - v * amp;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>
